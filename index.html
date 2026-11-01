@@ -5,6 +5,8 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>AgroGrant Assistant</title>
+	<link rel="icon"
+		href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=">
 	<style>
 		body {
 			font-family: 'Segoe UI', Tahoma, sans-serif;
@@ -85,6 +87,7 @@
 			color: white;
 			border: none;
 			transition: 0.2s;
+			white-space: nowrap;
 		}
 
 		#sendBtn {
@@ -97,6 +100,7 @@
 
 		#micBtn.recording {
 			background-color: #dc3545;
+			animation: pulse 1.5s infinite;
 		}
 
 		#downloadBtn {
@@ -119,18 +123,32 @@
 			font-weight: 600;
 			color: #198754;
 		}
+
+		@keyframes pulse {
+			0% {
+				transform: scale(1);
+			}
+
+			50% {
+				transform: scale(1.04);
+			}
+
+			100% {
+				transform: scale(1);
+			}
+		}
 	</style>
 </head>
 
 <body>
 	<div class="container">
 		<h1>🎙️ AgroGrant Assistant</h1>
-		<p>Розкажіть голосом або напишіть про своє агропідприємство</p>
+		<p>Розкажіть голосом (пауза 3.5 с для авто-відправки) або напишіть текстом</p>
 
 		<div id="chatbox"></div>
 
 		<div class="controls">
-			<input type="text" id="textInput" placeholder="Або введіть повідомлення текстом..." />
+			<input type="text" id="textInput" placeholder="Говоріть у мікрофон або введіть текст..." />
 			<button id="sendBtn" class="btn">Надіслати</button>
 			<button id="micBtn" class="btn">🎤 Голос</button>
 		</div>
@@ -164,6 +182,11 @@
 		const micBtn = document.getElementById('micBtn');
 		const downloadBtn = document.getElementById('downloadBtn');
 
+		let isRecording = false;
+		let finalTranscript = '';
+		let silenceTimer = null;
+		const SILENCE_DELAY = 3500;
+
 		function addMessage(sender, text, isError = false) {
 			const div = document.createElement('div');
 			div.className = 'msg ' + (isError ? 'error' : (sender === 'Ви' ? 'user' : 'bot'));
@@ -183,15 +206,17 @@
 		}
 
 		async function sendMessage(text) {
-			if (!text.trim()) return;
-			addMessage('Ви', text);
+			const cleanText = text.trim();
+			if (!cleanText) return;
+			addMessage('Ви', cleanText);
 			textInput.value = '';
+			finalTranscript = '';
 
 			try {
 				const response = await fetch(`${BACKEND_URL}/chat/${userId}`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ message: text })
+					body: JSON.stringify({ message: cleanText })
 				});
 
 				if (!response.ok) {
@@ -215,9 +240,6 @@
 			}
 		}
 
-		sendBtn.addEventListener('click', () => sendMessage(textInput.value));
-		textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(textInput.value); });
-
 		downloadBtn.addEventListener('click', () => {
 			window.location.href = `${BACKEND_URL}/export/${userId}`;
 		});
@@ -226,34 +248,82 @@
 		if (!SpeechRecognition) {
 			micBtn.disabled = true;
 			micBtn.textContent = 'Мікрофон недоступний';
+			sendBtn.addEventListener('click', () => sendMessage(textInput.value));
+			textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(textInput.value); });
 		} else {
 			const recognition = new SpeechRecognition();
 			recognition.lang = 'uk-UA';
-			recognition.interimResults = false;
+			recognition.continuous = true;
+			recognition.interimResults = true;
+
+			function stopRecordingAndSend() {
+				clearTimeout(silenceTimer);
+				if (isRecording) {
+					isRecording = false;
+					try { recognition.stop(); } catch (e) { }
+				}
+				micBtn.textContent = '🎤 Голос';
+				micBtn.classList.remove('recording');
+				if (textInput.value.trim()) {
+					sendMessage(textInput.value);
+				}
+			}
 
 			micBtn.addEventListener('click', () => {
-				if (micBtn.classList.contains('recording')) {
-					recognition.stop();
-					return;
+				if (isRecording) {
+					stopRecordingAndSend();
+				} else {
+					if (window.speechSynthesis) window.speechSynthesis.cancel();
+					finalTranscript = textInput.value ? textInput.value + ' ' : '';
+					isRecording = true;
+					try { recognition.start(); } catch (e) { }
+					micBtn.textContent = '⏹️ Готово';
+					micBtn.classList.add('recording');
 				}
-				recognition.start();
-				micBtn.textContent = '🔴 Слухаю...';
-				micBtn.classList.add('recording');
+			});
+
+			sendBtn.addEventListener('click', () => {
+				if (isRecording) {
+					stopRecordingAndSend();
+				} else {
+					sendMessage(textInput.value);
+				}
+			});
+
+			textInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') {
+					if (isRecording) stopRecordingAndSend();
+					else sendMessage(textInput.value);
+				}
 			});
 
 			recognition.onresult = (event) => {
-				const transcript = event.results[0][0].transcript;
-				sendMessage(transcript);
+				clearTimeout(silenceTimer);
+				let interimTranscript = '';
+				for (let i = event.resultIndex; i < event.results.length; ++i) {
+					if (event.results[i].isFinal) {
+						finalTranscript += event.results[i][0].transcript + ' ';
+					} else {
+						interimTranscript += event.results[i][0].transcript;
+					}
+				}
+				textInput.value = (finalTranscript + interimTranscript).trim();
+
+				silenceTimer = setTimeout(() => {
+					stopRecordingAndSend();
+				}, SILENCE_DELAY);
 			};
 
-			recognition.onspeechend = () => {
-				recognition.stop();
-				micBtn.textContent = '🎤 Голос';
-				micBtn.classList.remove('recording');
+			recognition.onend = () => {
+				if (isRecording) {
+					try { recognition.start(); } catch (e) { }
+				}
 			};
 
 			recognition.onerror = (event) => {
-				recognition.stop();
+				if (event.error === 'no-speech') return;
+				clearTimeout(silenceTimer);
+				isRecording = false;
 				micBtn.textContent = '🎤 Голос';
 				micBtn.classList.remove('recording');
 				addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
