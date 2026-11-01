@@ -1,335 +1,173 @@
-﻿<!DOCTYPE html>
-<html lang="uk">
+﻿<script>
+	const BACKEND_URL = "https://" + "agrogrant.onrender.com";
 
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>AgroGrant Assistant</title>
-	<link rel="icon"
-		href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=">
-	<style>
-		body {
-			font-family: 'Segoe UI', Tahoma, sans-serif;
-			text-align: center;
-			margin: 0;
-			padding: 20px;
-			background-color: #f4f7f6;
-		}
+	function uuidv4() {
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+			const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+			return v.toString(16);
+		});
+	}
+	const userId = localStorage.getItem('agrogrant_user_id') || uuidv4();
+	localStorage.setItem('agrogrant_user_id', userId);
 
-		.container {
-			max-width: 650px;
-			margin: 0 auto;
-		}
+	const chatbox = document.getElementById('chatbox');
+	const textInput = document.getElementById('textInput');
+	const sendBtn = document.getElementById('sendBtn');
+	const micBtn = document.getElementById('micBtn');
+	const downloadBtn = document.getElementById('downloadBtn');
 
-		#chatbox {
-			width: 100%;
-			height: 350px;
-			background: white;
-			border-radius: 10px;
-			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-			margin: 15px 0;
-			overflow-y: auto;
-			padding: 15px;
-			text-align: left;
-			display: flex;
-			flex-direction: column;
-			gap: 10px;
-			box-sizing: border-box;
-		}
+	let isRecording = false;
+	let isSending = false; // Захист від подвійної відправки
+	let finalTranscript = '';
+	let silenceTimer = null;
+	const SILENCE_DELAY = 3500;
 
-		.msg {
-			padding: 10px 15px;
-			border-radius: 15px;
-			max-width: 80%;
-			word-wrap: break-word;
-		}
+	function addMessage(sender, text, isError = false) {
+		const div = document.createElement('div');
+		div.className = 'msg ' + (isError ? 'error' : (sender === 'Ви' ? 'user' : 'bot'));
+		div.innerHTML = `<strong>${sender}:</strong><br>${text}`;
+		chatbox.appendChild(div);
+		chatbox.scrollTop = chatbox.scrollHeight;
+	}
 
-		.user {
-			background-color: #d1e7dd;
-			align-self: flex-end;
-			color: #0f5132;
-		}
+	function updateProfileUI(p) {
+		if (!p) return;
+		document.getElementById('p_region').textContent = p.region || '—';
+		document.getElementById('p_activity').textContent = p.activity_type || '—';
+		document.getElementById('p_size').textContent = p.size_category || '—';
+		document.getElementById('p_emp').textContent = p.employees_count || '—';
+		document.getElementById('p_focus').textContent = p.investment_focus || '—';
+		document.getElementById('p_own').textContent = p.own_contribution_percent || '—';
+	}
 
-		.bot {
-			background-color: #e2e3e5;
-			align-self: flex-start;
-			color: #41464c;
-		}
+	async function sendMessage(text) {
+		const cleanText = text.trim();
+		if (!cleanText || isSending) return;
 
-		.error {
-			background-color: #f8d7da;
-			align-self: center;
-			color: #842029;
-			font-size: 13px;
-		}
+		isSending = true;
+		addMessage('Ви', cleanText);
+		textInput.value = '';
+		finalTranscript = '';
 
-		.controls {
-			display: flex;
-			gap: 8px;
-			justify-content: center;
-			margin-bottom: 12px;
-		}
-
-		#textInput {
-			flex: 1;
-			padding: 12px;
-			border-radius: 25px;
-			border: 1px solid #ccc;
-			font-size: 15px;
-			outline: none;
-		}
-
-		.btn {
-			padding: 12px 22px;
-			font-size: 16px;
-			cursor: pointer;
-			border-radius: 25px;
-			color: white;
-			border: none;
-			transition: 0.2s;
-			white-space: nowrap;
-		}
-
-		#sendBtn {
-			background-color: #0d6efd;
-		}
-
-		#micBtn {
-			background-color: #198754;
-		}
-
-		#micBtn.recording {
-			background-color: #dc3545;
-			animation: pulse 1.5s infinite;
-		}
-
-		#downloadBtn {
-			background-color: #6f42c1;
-			margin-top: 10px;
-			width: 100%;
-		}
-
-		#profileBox {
-			background: white;
-			padding: 12px 15px;
-			border-radius: 10px;
-			text-align: left;
-			font-size: 14px;
-			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
-			margin-top: 10px;
-		}
-
-		#profileBox span {
-			font-weight: 600;
-			color: #198754;
-		}
-
-		@keyframes pulse {
-			0% {
-				transform: scale(1);
-			}
-
-			50% {
-				transform: scale(1.04);
-			}
-
-			100% {
-				transform: scale(1);
-			}
-		}
-	</style>
-</head>
-
-<body>
-	<div class="container">
-		<h1>🎙️ AgroGrant Assistant</h1>
-		<p>Розкажіть голосом (пауза 3.5 с для авто-відправки) або напишіть текстом</p>
-
-		<div id="chatbox"></div>
-
-		<div class="controls">
-			<input type="text" id="textInput" placeholder="Говоріть у мікрофон або введіть текст..." />
-			<button id="sendBtn" class="btn">Надіслати</button>
-			<button id="micBtn" class="btn">🎤 Голос</button>
-		</div>
-
-		<div id="profileBox">
-			<strong>Зібрані дані підприємства:</strong><br>
-			Регіон: <span id="p_region">—</span> | Діяльність: <span id="p_activity">—</span> | Розмір: <span
-				id="p_size">—</span><br>
-			Працівники: <span id="p_emp">—</span> | Інвестиції: <span id="p_focus">—</span> | Внесок: <span
-				id="p_own">—</span>
-		</div>
-
-		<button id="downloadBtn" class="btn">📥 Завантажити грантову заявку (Word)</button>
-	</div>
-
-	<script>
-		const BACKEND_URL = "https://" + "agrogrant.onrender.com";
-
-		function uuidv4() {
-			return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-				const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-				return v.toString(16);
+		try {
+			const response = await fetch(`${BACKEND_URL}/chat/${userId}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ message: cleanText })
 			});
+
+			if (!response.ok) {
+				const errText = await response.text();
+				throw new Error(`Помилка сервера (${response.status}): ${errText}`);
+			}
+
+			const data = await response.json();
+			addMessage('AgroGrant', data.reply, data.is_error);
+			updateProfileUI(data.profile);
+
+			if (!data.is_error && window.speechSynthesis) {
+				window.speechSynthesis.cancel();
+				const utterance = new SpeechSynthesisUtterance(data.reply);
+				utterance.lang = 'uk-UA';
+				window.speechSynthesis.speak(utterance);
+			}
+		} catch (error) {
+			console.error('Fetch error:', error);
+			addMessage('Помилка', error.message || 'Не вдалося з\'єднатися із сервером.', true);
+		} finally {
+			isSending = false;
 		}
-		const userId = localStorage.getItem('agrogrant_user_id') || uuidv4();
-		localStorage.setItem('agrogrant_user_id', userId);
+	}
 
-		const chatbox = document.getElementById('chatbox');
-		const textInput = document.getElementById('textInput');
-		const sendBtn = document.getElementById('sendBtn');
-		const micBtn = document.getElementById('micBtn');
-		const downloadBtn = document.getElementById('downloadBtn');
+	downloadBtn.addEventListener('click', () => {
+		window.location.href = `${BACKEND_URL}/export/${userId}`;
+	});
 
-		let isRecording = false;
-		let finalTranscript = '';
-		let silenceTimer = null;
-		const SILENCE_DELAY = 3500;
+	const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+	if (!SpeechRecognition) {
+		micBtn.disabled = true;
+		micBtn.textContent = 'Мікрофон недоступний';
+		sendBtn.addEventListener('click', () => sendMessage(textInput.value));
+		textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(textInput.value); });
+	} else {
+		const recognition = new SpeechRecognition();
+		recognition.lang = 'uk-UA';
+		recognition.continuous = true;
+		recognition.interimResults = true;
 
-		function addMessage(sender, text, isError = false) {
-			const div = document.createElement('div');
-			div.className = 'msg ' + (isError ? 'error' : (sender === 'Ви' ? 'user' : 'bot'));
-			div.innerHTML = `<strong>${sender}:</strong><br>${text}`;
-			chatbox.appendChild(div);
-			chatbox.scrollTop = chatbox.scrollHeight;
-		}
+		function stopRecordingAndSend() {
+			clearTimeout(silenceTimer);
+			if (isRecording) {
+				isRecording = false;
+				try { recognition.stop(); } catch (e) { }
+			}
+			micBtn.textContent = '🎤 Голос';
+			micBtn.classList.remove('recording');
 
-		function updateProfileUI(p) {
-			if (!p) return;
-			document.getElementById('p_region').textContent = p.region || '—';
-			document.getElementById('p_activity').textContent = p.activity_type || '—';
-			document.getElementById('p_size').textContent = p.size_category || '—';
-			document.getElementById('p_emp').textContent = p.employees_count || '—';
-			document.getElementById('p_focus').textContent = p.investment_focus || '—';
-			document.getElementById('p_own').textContent = p.own_contribution_percent || '—';
-		}
-
-		async function sendMessage(text) {
-			const cleanText = text.trim();
-			if (!cleanText) return;
-			addMessage('Ви', cleanText);
-			textInput.value = '';
-			finalTranscript = '';
-
-			try {
-				const response = await fetch(`${BACKEND_URL}/chat/${userId}`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ message: cleanText })
-				});
-
-				if (!response.ok) {
-					const errText = await response.text();
-					throw new Error(`Помилка сервера (${response.status}): ${errText}`);
-				}
-
-				const data = await response.json();
-				addMessage('AgroGrant', data.reply, data.is_error);
-				updateProfileUI(data.profile);
-
-				if (!data.is_error && window.speechSynthesis) {
-					window.speechSynthesis.cancel();
-					const utterance = new SpeechSynthesisUtterance(data.reply);
-					utterance.lang = 'uk-UA';
-					window.speechSynthesis.speak(utterance);
-				}
-			} catch (error) {
-				console.error('Fetch error:', error);
-				addMessage('Помилка', error.message || 'Не вдалося з\'єднатися із сервером.', true);
+			const textToSend = textInput.value;
+			if (textToSend.trim() && !isSending) {
+				sendMessage(textToSend);
 			}
 		}
 
-		downloadBtn.addEventListener('click', () => {
-			window.location.href = `${BACKEND_URL}/export/${userId}`;
+		micBtn.addEventListener('click', () => {
+			if (isRecording) {
+				stopRecordingAndSend();
+			} else {
+				if (window.speechSynthesis) window.speechSynthesis.cancel();
+				finalTranscript = textInput.value ? textInput.value + ' ' : '';
+				isRecording = true;
+				try { recognition.start(); } catch (e) { }
+				micBtn.textContent = '⏹️ Готово';
+				micBtn.classList.add('recording');
+			}
 		});
 
-		const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-		if (!SpeechRecognition) {
-			micBtn.disabled = true;
-			micBtn.textContent = 'Мікрофон недоступний';
-			sendBtn.addEventListener('click', () => sendMessage(textInput.value));
-			textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(textInput.value); });
-		} else {
-			const recognition = new SpeechRecognition();
-			recognition.lang = 'uk-UA';
-			recognition.continuous = true;
-			recognition.interimResults = true;
+		sendBtn.addEventListener('click', () => {
+			if (isRecording) {
+				stopRecordingAndSend();
+			} else {
+				sendMessage(textInput.value);
+			}
+		});
 
-			function stopRecordingAndSend() {
-				clearTimeout(silenceTimer);
-				if (isRecording) {
-					isRecording = false;
-					try { recognition.stop(); } catch (e) { }
-				}
-				micBtn.textContent = '🎤 Голос';
-				micBtn.classList.remove('recording');
-				if (textInput.value.trim()) {
-					sendMessage(textInput.value);
+		textInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				if (isRecording) stopRecordingAndSend();
+				else sendMessage(textInput.value);
+			}
+		});
+
+		recognition.onresult = (event) => {
+			clearTimeout(silenceTimer);
+			let interimTranscript = '';
+			for (let i = event.resultIndex; i < event.results.length; ++i) {
+				if (event.results[i].isFinal) {
+					finalTranscript += event.results[i][0].transcript + ' ';
+				} else {
+					interimTranscript += event.results[i][0].transcript;
 				}
 			}
+			textInput.value = (finalTranscript + interimTranscript).trim();
 
-			micBtn.addEventListener('click', () => {
-				if (isRecording) {
-					stopRecordingAndSend();
-				} else {
-					if (window.speechSynthesis) window.speechSynthesis.cancel();
-					finalTranscript = textInput.value ? textInput.value + ' ' : '';
-					isRecording = true;
-					try { recognition.start(); } catch (e) { }
-					micBtn.textContent = '⏹️ Готово';
-					micBtn.classList.add('recording');
-				}
-			});
+			silenceTimer = setTimeout(() => {
+				stopRecordingAndSend();
+			}, SILENCE_DELAY);
+		};
 
-			sendBtn.addEventListener('click', () => {
-				if (isRecording) {
-					stopRecordingAndSend();
-				} else {
-					sendMessage(textInput.value);
-				}
-			});
+		recognition.onend = () => {
+			if (isRecording) {
+				try { recognition.start(); } catch (e) { }
+			}
+		};
 
-			textInput.addEventListener('keydown', (e) => {
-				if (e.key === 'Enter') {
-					if (isRecording) stopRecordingAndSend();
-					else sendMessage(textInput.value);
-				}
-			});
-
-			recognition.onresult = (event) => {
-				clearTimeout(silenceTimer);
-				let interimTranscript = '';
-				for (let i = event.resultIndex; i < event.results.length; ++i) {
-					if (event.results[i].isFinal) {
-						finalTranscript += event.results[i][0].transcript + ' ';
-					} else {
-						interimTranscript += event.results[i][0].transcript;
-					}
-				}
-				textInput.value = (finalTranscript + interimTranscript).trim();
-
-				silenceTimer = setTimeout(() => {
-					stopRecordingAndSend();
-				}, SILENCE_DELAY);
-			};
-
-			recognition.onend = () => {
-				if (isRecording) {
-					try { recognition.start(); } catch (e) { }
-				}
-			};
-
-			recognition.onerror = (event) => {
-				if (event.error === 'no-speech') return;
-				clearTimeout(silenceTimer);
-				isRecording = false;
-				micBtn.textContent = '🎤 Голос';
-				micBtn.classList.remove('recording');
-				addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
-			};
-		}
-	</script>
-</body>
-
-</html>
+		recognition.onerror = (event) => {
+			if (event.error === 'no-speech') return;
+			clearTimeout(silenceTimer);
+			isRecording = false;
+			micBtn.textContent = '🎤 Голос';
+			micBtn.classList.remove('recording');
+			addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
+		};
+	}
+</script>
