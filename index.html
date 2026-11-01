@@ -109,6 +109,12 @@
 			width: 100%;
 		}
 
+		#resetBtn {
+			background-color: #6c757d;
+			margin-top: 8px;
+			width: 100%;
+		}
+
 		#profileBox {
 			background: white;
 			padding: 12px 15px;
@@ -162,6 +168,7 @@
 		</div>
 
 		<button id="downloadBtn" class="btn">📥 Завантажити грантову заявку (Word)</button>
+		<button id="resetBtn" class="btn">🔄 Почати нову заявку (скинути сесію)</button>
 	</div>
 
 	<script>
@@ -174,14 +181,19 @@
 					return v.toString(16);
 				});
 			}
-			const userId = localStorage.getItem('agrogrant_user_id') || uuidv4();
-			localStorage.setItem('agrogrant_user_id', userId);
+
+			let userId = localStorage.getItem('agrogrant_user_id');
+			if (!userId) {
+				userId = uuidv4();
+				localStorage.setItem('agrogrant_user_id', userId);
+			}
 
 			const chatbox = document.getElementById('chatbox');
 			const textInput = document.getElementById('textInput');
 			const sendBtn = document.getElementById('sendBtn');
 			const micBtn = document.getElementById('micBtn');
 			const downloadBtn = document.getElementById('downloadBtn');
+			const resetBtn = document.getElementById('resetBtn');
 
 			let isRecording = false;
 			let isSending = false;
@@ -199,7 +211,6 @@
 			}
 
 			function updateProfileUI(p) {
-				if (!p) return;
 				const reg = document.getElementById('p_region');
 				const act = document.getElementById('p_activity');
 				const sz = document.getElementById('p_size');
@@ -207,12 +218,12 @@
 				const foc = document.getElementById('p_focus');
 				const own = document.getElementById('p_own');
 
-				if (reg) reg.textContent = p.region || '—';
-				if (act) act.textContent = p.activity_type || '—';
-				if (sz) sz.textContent = p.size_category || '—';
-				if (emp) emp.textContent = p.employees_count || '—';
-				if (foc) foc.textContent = p.investment_focus || '—';
-				if (own) own.textContent = p.own_contribution_percent || '—';
+				if (reg) reg.textContent = p && p.region ? p.region : '—';
+				if (act) act.textContent = p && p.activity_type ? p.activity_type : '—';
+				if (sz) sz.textContent = p && p.size_category ? p.size_category : '—';
+				if (emp) emp.textContent = p && p.employees_count ? p.employees_count : '—';
+				if (foc) foc.textContent = p && p.investment_focus ? p.investment_focus : '—';
+				if (own) own.textContent = p && p.own_contribution_percent ? p.own_contribution_percent : '—';
 			}
 
 			async function sendMessage(text) {
@@ -260,6 +271,19 @@
 				});
 			}
 
+			if (resetBtn) {
+				resetBtn.addEventListener('click', () => {
+					if (confirm("Ви дійсно хочете скинути поточну сесію та почати нову заявку?")) {
+						localStorage.removeItem('agrogrant_user_id');
+						userId = uuidv4();
+						localStorage.setItem('agrogrant_user_id', userId);
+						if (chatbox) chatbox.innerHTML = '';
+						updateProfileUI(null);
+						addMessage('Система', 'Сесію скинуто. Розкажіть про нове підприємство.');
+					}
+				});
+			}
+
 			const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 			if (!SpeechRecognition) {
 				if (micBtn) {
@@ -274,99 +298,4 @@
 				}
 			} else {
 				const recognition = new SpeechRecognition();
-				recognition.lang = 'uk-UA';
-				recognition.continuous = true;
-				recognition.interimResults = true;
-
-				function stopRecordingAndSend() {
-					clearTimeout(silenceTimer);
-					if (isRecording) {
-						isRecording = false;
-						try { recognition.stop(); } catch (e) { }
-					}
-					if (micBtn) {
-						micBtn.textContent = '🎤 Голос';
-						micBtn.classList.remove('recording');
-					}
-
-					const textToSend = textInput ? textInput.value : '';
-					if (textToSend.trim() && !isSending) {
-						sendMessage(textToSend);
-					}
-				}
-
-				if (micBtn) {
-					micBtn.addEventListener('click', () => {
-						if (isRecording) {
-							stopRecordingAndSend();
-						} else {
-							if (window.speechSynthesis) window.speechSynthesis.cancel();
-							finalTranscript = (textInput && textInput.value) ? textInput.value + ' ' : '';
-							isRecording = true;
-							try { recognition.start(); } catch (e) { }
-							micBtn.textContent = '⏹️ Готово';
-							micBtn.classList.add('recording');
-						}
-					});
-				}
-
-				if (sendBtn) {
-					sendBtn.addEventListener('click', () => {
-						if (isRecording) {
-							stopRecordingAndSend();
-						} else {
-							if (textInput) sendMessage(textInput.value);
-						}
-					});
-				}
-
-				if (textInput) {
-					textInput.addEventListener('keydown', (e) => {
-						if (e.key === 'Enter') {
-							if (isRecording) stopRecordingAndSend();
-							else sendMessage(textInput.value);
-						}
-					});
-				}
-
-				recognition.onresult = (event) => {
-					clearTimeout(silenceTimer);
-					let interimTranscript = '';
-					for (let i = event.resultIndex; i < event.results.length; ++i) {
-						if (event.results[i].isFinal) {
-							finalTranscript += event.results[i][0].transcript + ' ';
-						} else {
-							interimTranscript += event.results[i][0].transcript;
-						}
-					}
-					if (textInput) {
-						textInput.value = (finalTranscript + interimTranscript).trim();
-					}
-
-					silenceTimer = setTimeout(() => {
-						stopRecordingAndSend();
-					}, SILENCE_DELAY);
-				};
-
-				recognition.onend = () => {
-					if (isRecording) {
-						try { recognition.start(); } catch (e) { }
-					}
-				};
-
-				recognition.onerror = (event) => {
-					if (event.error === 'no-speech') return;
-					clearTimeout(silenceTimer);
-					isRecording = false;
-					if (micBtn) {
-						micBtn.textContent = '🎤 Голос';
-						micBtn.classList.remove('recording');
-					}
-					addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
-				};
-			}
-		});
-	</script>
-</body>
-
-</html>
+				recognition.lang =
