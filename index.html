@@ -7,27 +7,32 @@
 	<title>AgroGrant Assistant</title>
 	<style>
 		body {
-			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			font-family: 'Segoe UI', Tahoma, sans-serif;
 			text-align: center;
 			margin: 0;
 			padding: 20px;
 			background-color: #f4f7f6;
 		}
 
+		.container {
+			max-width: 650px;
+			margin: 0 auto;
+		}
+
 		#chatbox {
 			width: 100%;
-			max-width: 600px;
-			height: 400px;
+			height: 350px;
 			background: white;
 			border-radius: 10px;
 			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-			margin: 20px auto;
+			margin: 15px 0;
 			overflow-y: auto;
 			padding: 15px;
 			text-align: left;
 			display: flex;
 			flex-direction: column;
 			gap: 10px;
+			box-sizing: border-box;
 		}
 
 		.msg {
@@ -56,70 +61,94 @@
 			font-size: 13px;
 		}
 
-		#micBtn {
-			padding: 15px 30px;
-			font-size: 18px;
-			cursor: pointer;
-			border-radius: 50px;
-			background-color: #198754;
-			color: white;
-			border: none;
-			transition: background-color 0.3s;
-			box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+		.controls {
+			display: flex;
+			gap: 8px;
+			justify-content: center;
+			margin-bottom: 12px;
 		}
 
-		#micBtn:hover {
-			background-color: #157347;
+		#textInput {
+			flex: 1;
+			padding: 12px;
+			border-radius: 25px;
+			border: 1px solid #ccc;
+			font-size: 15px;
+			outline: none;
+		}
+
+		.btn {
+			padding: 12px 22px;
+			font-size: 16px;
+			cursor: pointer;
+			border-radius: 25px;
+			color: white;
+			border: none;
+			transition: 0.2s;
+		}
+
+		#sendBtn {
+			background-color: #0d6efd;
+		}
+
+		#micBtn {
+			background-color: #198754;
 		}
 
 		#micBtn.recording {
 			background-color: #dc3545;
-			animation: pulse 1.5s infinite;
 		}
 
-		@keyframes pulse {
-			0% {
-				transform: scale(1);
-			}
+		#downloadBtn {
+			background-color: #6f42c1;
+			margin-top: 10px;
+			width: 100%;
+		}
 
-			50% {
-				transform: scale(1.05);
-			}
+		#profileBox {
+			background: white;
+			padding: 12px 15px;
+			border-radius: 10px;
+			text-align: left;
+			font-size: 14px;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+			margin-top: 10px;
+		}
 
-			100% {
-				transform: scale(1);
-			}
+		#profileBox span {
+			font-weight: 600;
+			color: #198754;
 		}
 	</style>
 </head>
 
 <body>
-	<h1>🎙️ AgroGrant Assistant</h1>
-	<p>Натисніть на мікрофон та розкажіть про своє підприємство</p>
+	<div class="container">
+		<h1>🎙️ AgroGrant Assistant</h1>
+		<p>Розкажіть голосом або напишіть про своє агропідприємство</p>
 
-	<div id="chatbox"></div>
-	<button id="micBtn">🎤 Почати розмову</button>
-	<div style="margin-top: 15px;">
-		<button id="downloadBtn"
-			style="padding: 10px 20px; font-size: 16px; background-color: #0d6efd; color: white; border: none; border-radius: 5px; cursor: pointer; display: none;">
-			📥 Завантажити грантову заявку (Word)
-		</button>
+		<div id="chatbox"></div>
+
+		<div class="controls">
+			<input type="text" id="textInput" placeholder="Або введіть повідомлення текстом..." />
+			<button id="sendBtn" class="btn">Надіслати</button>
+			<button id="micBtn" class="btn">🎤 Голос</button>
+		</div>
+
+		<div id="profileBox">
+			<strong>Зібрані дані підприємства:</strong><br>
+			Регіон: <span id="p_region">—</span> | Діяльність: <span id="p_activity">—</span> | Розмір: <span
+				id="p_size">—</span><br>
+			Працівники: <span id="p_emp">—</span> | Інвестиції: <span id="p_focus">—</span> | Внесок: <span
+				id="p_own">—</span>
+		</div>
+
+		<button id="downloadBtn" class="btn">📥 Завантажити грантову заявку (Word)</button>
 	</div>
 
 	<script>
-		// Додай цей обробник у секцію <script> після ініціалізації userId
-		const downloadBtn = document.getElementById('downloadBtn');
+		const BACKEND_URL = "[https://agrogrant.onrender.com](https://agrogrant.onrender.com)";
 
-		// Показуємо кнопку завантаження після першої успішної відповіді або в кінці розмови
-		function showDownloadButton() {
-			downloadBtn.style.display = 'inline-block';
-		}
-
-		downloadBtn.addEventListener('click', () => {
-			window.location.href = `https://agrogrant.onrender.com/export/${userId}`;
-		});
-	</script>
-	<script>
 		function uuidv4() {
 			return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
 				const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -129,8 +158,11 @@
 		const userId = localStorage.getItem('agrogrant_user_id') || uuidv4();
 		localStorage.setItem('agrogrant_user_id', userId);
 
-		const micBtn = document.getElementById('micBtn');
 		const chatbox = document.getElementById('chatbox');
+		const textInput = document.getElementById('textInput');
+		const sendBtn = document.getElementById('sendBtn');
+		const micBtn = document.getElementById('micBtn');
+		const downloadBtn = document.getElementById('downloadBtn');
 
 		function addMessage(sender, text, isError = false) {
 			const div = document.createElement('div');
@@ -140,10 +172,60 @@
 			chatbox.scrollTop = chatbox.scrollHeight;
 		}
 
+		function updateProfileUI(p) {
+			if (!p) return;
+			document.getElementById('p_region').textContent = p.region || '—';
+			document.getElementById('p_activity').textContent = p.activity_type || '—';
+			document.getElementById('p_size').textContent = p.size_category || '—';
+			document.getElementById('p_emp').textContent = p.employees_count || '—';
+			document.getElementById('p_focus').textContent = p.investment_focus || '—';
+			document.getElementById('p_own').textContent = p.own_contribution_percent || '—';
+		}
+
+		async function sendMessage(text) {
+			if (!text.trim()) return;
+			addMessage('Ви', text);
+			textInput.value = '';
+
+			try {
+				const response = await fetch(`${BACKEND_URL}/chat/${userId}`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ message: text })
+				});
+
+				if (!response.ok) {
+					const errText = await response.text();
+					throw new Error(`Помилка сервера (${response.status}): ${errText}`);
+				}
+
+				const data = await response.json();
+				addMessage('AgroGrant', data.reply, data.is_error);
+				updateProfileUI(data.profile);
+
+				if (!data.is_error && window.speechSynthesis) {
+					window.speechSynthesis.cancel();
+					const utterance = new SpeechSynthesisUtterance(data.reply);
+					utterance.lang = 'uk-UA';
+					window.speechSynthesis.speak(utterance);
+				}
+			} catch (error) {
+				console.error('Fetch error:', error);
+				addMessage('Помилка', error.message || 'Не вдалося з\'єднатися із сервером.', true);
+			}
+		}
+
+		sendBtn.addEventListener('click', () => sendMessage(textInput.value));
+		textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(textInput.value); });
+
+		downloadBtn.addEventListener('click', () => {
+			window.location.href = `${BACKEND_URL}/export/${userId}`;
+		});
+
 		const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 		if (!SpeechRecognition) {
-			addMessage('Система', 'Ваш браузер не підтримує розпізнавання голосу. Використовуйте Google Chrome.', true);
 			micBtn.disabled = true;
+			micBtn.textContent = 'Мікрофон недоступний';
 		} else {
 			const recognition = new SpeechRecognition();
 			recognition.lang = 'uk-UA';
@@ -155,48 +237,24 @@
 					return;
 				}
 				recognition.start();
-				micBtn.textContent = '🔴 Слухаю вас...';
+				micBtn.textContent = '🔴 Слухаю...';
 				micBtn.classList.add('recording');
 			});
 
-			recognition.onresult = async (event) => {
-				const text = event.results[0][0].transcript;
-				addMessage('Ви', text);
-
-				try {
-					const response = await fetch(`https://agrogrant.onrender.com/chat/${userId}`, {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ message: text })
-					});
-
-					if (!response.ok) {
-						const errText = await response.text();
-						throw new Error(`Server status ${response.status}: ${errText}`);
-					}
-
-					const data = await response.json();
-					addMessage('AgroGrant', data.reply);
-
-					const utterance = new SpeechSynthesisUtterance(data.reply);
-					utterance.lang = 'uk-UA';
-					window.speechSynthesis.speak(utterance);
-
-				} catch (error) {
-					console.error('Fetch error:', error);
-					addMessage('Помилка', error.message || 'Помилка з\'єднання з сервером.', true);
-				}
+			recognition.onresult = (event) => {
+				const transcript = event.results[0][0].transcript;
+				sendMessage(transcript);
 			};
 
 			recognition.onspeechend = () => {
 				recognition.stop();
-				micBtn.textContent = '🎤 Почати розмову';
+				micBtn.textContent = '🎤 Голос';
 				micBtn.classList.remove('recording');
 			};
 
 			recognition.onerror = (event) => {
 				recognition.stop();
-				micBtn.textContent = '🎤 Почати розмову';
+				micBtn.textContent = '🎤 Голос';
 				micBtn.classList.remove('recording');
 				addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
 			};

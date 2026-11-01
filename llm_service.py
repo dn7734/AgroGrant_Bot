@@ -4,22 +4,31 @@ import httpx
 
 class LLMService:
     def __init__(self):
-        self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.models = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-flash-latest"
+        ]
+        self.api_key = os.getenv("GEMINI_API_KEY", "").strip()
 
     async def generate_response(self, user_message: str, current_profile: dict) -> dict:
         if not self.api_key:
-            print("ERROR: GEMINI_API_KEY is not set in environment variables!")
-            return {"reply": "Помилка конфігурації: не задано GEMINI_API_KEY на сервісі Render.", "extracted_data": {}}
+            return {
+                "reply": "Помилка конфігурації сервера. Відсутній ключ доступу.",
+                "extracted_data": {},
+                "is_error": True
+            }
 
         system_instruction = (
-            "Ти привітний голосовий асистент AgroGrant. Твоя мета — зібрати дані для гранту. "
-            "Підтримуй вільну розмову, дозволяй користувачеві розповідати своїми словами. "
-            f"Поточний профіль користувача: {json.dumps(current_profile, ensure_ascii=False)}. "
-            "Витягни нові дані з повідомлення користувача. Запитуй лише те, чого не вистачає. "
-            "ОБОВ'ЯЗКОВО повертай відповідь у форматі JSON з двома полями: "
-            "'reply' (текст для користувача) та 'extracted_data' (словник з ключами region, activity_type, "
-            "size_category, employees_count, investment_focus, own_contribution_percent, де значення - це рядок або null)."
+            "Ти голосовий асистент АгроГрант. Твоя мета — зібрати дані про агропідприємство для грантової заявки. "
+            "Спілкуйся виключно українською мовою, коротко, природно і без латинських абревіатур. "
+            f"Поточний профіль підприємства: {json.dumps(current_profile, ensure_ascii=False)}. "
+            "Витягни нові дані з повідомлення користувача та м'яко запитай про1-2 наступні незаповнені поля. "
+            "Коли всі поля заповнені, повідоми, що грантову заявку сформовано і її можна завантажити кнопкою нижче. "
+            "ОБОВ'ЯЗКОВО повертай відповідь строго у форматі JSON з двома полями: "
+            "'reply' (текст відповіді українською) та 'extracted_data' (словник із ключами: "
+            "region, activity_type, size_category, employees_count, investment_focus, own_contribution_percent; "
+            "значення — рядок або null)."
         )
 
         headers = {"Content-Type": "application/json"}
@@ -28,28 +37,42 @@ class LLMService:
             "contents": [{"role": "user", "parts": [{"text": user_message}]}],
             "generationConfig": {"response_mime_type": "application/json"}
         }
-        
+
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.api_url}?key={self.api_key}",
-                    headers=headers,
-                    json=payload,
-                    timeout=20.0
-                )
-                
-                print(f"Gemini API Status Code: {response.status_code}")
-                if response.status_code == 200:
-                    data = response.json()
-                    text_response = data['candidates'][0]['content']['parts'][0]['text']
-                    try:
-                        return json.loads(text_response)
-                    except Exception as e:
-                        print(f"JSON decode error from Gemini response: {e}, text was: {text_response}")
-                        return {"reply": "Сталася помилка обробки відповіді LLM.", "extracted_data": {}}
-                else:
-                    print(f"Gemini API Error Response: {response.text}")
-                    return {"reply": f"Помилка від Gemini API (код {response.status_code}).", "extracted_data": {}}
+                last_status = None
+                for model_name in self.models:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
+                    response = await client.post(url, headers=headers, json=payload, timeout=25.0)
+                    last_status = response.status_code
+                    print(f"Model {model_name} -> Status Code: {response.status_code}")
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        text_response = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        if text_response.startswith("```"):
+                            text_response = text_response.strip("`").removeprefix("json").strip()
+                        parsed = json.loads(text_response)
+                        return {
+                            "reply": parsed.get("reply", "Дані прийнято."),
+                            "extracted_data": parsed.get("extracted_data", {}),
+                            "is_error": False
+                        }
+                    elif response.status_code == 404:
+                        continue
+                    else:
+                        print(f"API Error on {model_name}: {response.text}")
+                        break
+
+                return {
+                    "reply": f"Сервіс штучного інтелекту повернув помилку, код {last_status}.",
+                    "extracted_data": {},
+                    "is_error": True
+                }
         except Exception as e:
-            print(f"Exception during Gemini API request: {e}")
-            return {"reply": f"Помилка з'єднання з Gemini API: {str(e)}", "extracted_data": {}}
+            print(f"LLM Exception: {e}")
+            return {
+                "reply": "Тимчасовий збій зв'язку із сервісом обробки мови.",
+                "extracted_data": {},
+                "is_error": True
+            }
