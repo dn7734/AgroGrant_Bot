@@ -298,4 +298,99 @@
 				}
 			} else {
 				const recognition = new SpeechRecognition();
-				recognition.lang =
+				recognition.lang = 'uk-UA';
+				recognition.continuous = true;
+				recognition.interimResults = true;
+
+				function stopRecordingAndSend() {
+					clearTimeout(silenceTimer);
+					if (isRecording) {
+						isRecording = false;
+						try { recognition.stop(); } catch (e) { }
+					}
+					if (micBtn) {
+						micBtn.textContent = '🎤 Голос';
+						micBtn.classList.remove('recording');
+					}
+
+					const textToSend = textInput ? textInput.value : '';
+					if (textToSend.trim() && !isSending) {
+						sendMessage(textToSend);
+					}
+				}
+
+				if (micBtn) {
+					micBtn.addEventListener('click', () => {
+						if (isRecording) {
+							stopRecordingAndSend();
+						} else {
+							if (window.speechSynthesis) window.speechSynthesis.cancel();
+							finalTranscript = (textInput && textInput.value) ? textInput.value + ' ' : '';
+							isRecording = true;
+							try { recognition.start(); } catch (e) { }
+							micBtn.textContent = '⏹️ Готово';
+							micBtn.classList.add('recording');
+						}
+					});
+				}
+
+				if (sendBtn) {
+					sendBtn.addEventListener('click', () => {
+						if (isRecording) {
+							stopRecordingAndSend();
+						} else {
+							if (textInput) sendMessage(textInput.value);
+						}
+					});
+				}
+
+				if (textInput) {
+					textInput.addEventListener('keydown', (e) => {
+						if (e.key === 'Enter') {
+							if (isRecording) stopRecordingAndSend();
+							else sendMessage(textInput.value);
+						}
+					});
+				}
+
+				recognition.onresult = (event) => {
+					clearTimeout(silenceTimer);
+					let interimTranscript = '';
+					for (let i = event.resultIndex; i < event.results.length; ++i) {
+						if (event.results[i].isFinal) {
+							finalTranscript += event.results[i][0].transcript + ' ';
+						} else {
+							interimTranscript += event.results[i][0].transcript;
+						}
+					}
+					if (textInput) {
+						textInput.value = (finalTranscript + interimTranscript).trim();
+					}
+
+					silenceTimer = setTimeout(() => {
+						stopRecordingAndSend();
+					}, SILENCE_DELAY);
+				};
+
+				recognition.onend = () => {
+					if (isRecording) {
+						try { recognition.start(); } catch (e) { }
+					}
+				};
+
+				recognition.onerror = (event) => {
+					if (event.error === 'no-speech') return;
+					clearTimeout(silenceTimer);
+					isRecording = false;
+					if (micBtn) {
+						micBtn.textContent = '🎤 Голос';
+						micBtn.classList.remove('recording');
+					}
+					addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
+				};
+			}
+		});
+	</script>
+</body>
+
+</html>
