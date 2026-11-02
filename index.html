@@ -8,6 +8,7 @@
 	<link rel="icon"
 		href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=">
 	<style>
+		/* Базові налаштування сторінки та контейнера */
 		body {
 			font-family: 'Segoe UI', Tahoma, sans-serif;
 			text-align: center;
@@ -21,6 +22,7 @@
 			margin: 0 auto;
 		}
 
+		/* Стилізація головного вікна чату */
 		#chatbox {
 			width: 100%;
 			height: 350px;
@@ -37,6 +39,7 @@
 			box-sizing: border-box;
 		}
 
+		/* Оформлення окремих повідомлень (бульбашок) */
 		.msg {
 			padding: 10px 15px;
 			border-radius: 15px;
@@ -63,6 +66,7 @@
 			font-size: 13px;
 		}
 
+		/* Панель вводу тексту та кнопок */
 		.controls {
 			display: flex;
 			gap: 8px;
@@ -79,6 +83,7 @@
 			outline: none;
 		}
 
+		/* Загальні стилі для всіх кнопок */
 		.btn {
 			padding: 12px 22px;
 			font-size: 16px;
@@ -95,17 +100,13 @@
 			cursor: wait;
 		}
 
+		/* Індивідуальні кольори кнопок */
 		#sendBtn {
 			background-color: #0d6efd;
 		}
 
 		#micBtn {
 			background-color: #198754;
-		}
-
-		#micBtn.recording {
-			background-color: #dc3545;
-			animation: pulse 1.5s infinite;
 		}
 
 		#downloadBtn {
@@ -120,20 +121,10 @@
 			width: 100%;
 		}
 
-		#profileBox {
-			background: white;
-			padding: 12px 15px;
-			border-radius: 10px;
-			text-align: left;
-			font-size: 14px;
-			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
-			margin-top: 10px;
-			line-height: 1.6;
-		}
-
-		#profileBox span {
-			font-weight: 600;
-			color: #198754;
+		/* Анімація пульсації під час запису голосу */
+		#micBtn.recording {
+			background-color: #dc3545;
+			animation: pulse 1.5s infinite;
 		}
 
 		@keyframes pulse {
@@ -149,11 +140,29 @@
 				transform: scale(1);
 			}
 		}
+
+		/* Панель з анкетою підприємства */
+		#profileBox {
+			background: white;
+			padding: 12px 15px;
+			border-radius: 10px;
+			text-align: left;
+			font-size: 14px;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+			margin-top: 10px;
+			line-height: 1.6;
+		}
+
+		#profileBox span {
+			font-weight: 600;
+			color: #198754;
+		}
 	</style>
 </head>
 
 <body>
 	<div class="container">
+		<!-- Залишаємо єдину іконку в заголовку -->
 		<h1>🎙️ AgroGrant Assistant</h1>
 		<p>Назвіть код ЄДРПОУ (наприклад, 03728915) або розкажіть про своє агропідприємство</p>
 
@@ -161,8 +170,9 @@
 
 		<div class="controls">
 			<input type="text" id="textInput" placeholder="Говоріть у мікрофон або введіть текст / ЄДРПОУ..." />
+			<!-- Прибрано емодзі з кнопок -->
 			<button id="sendBtn" class="btn">Надіслати</button>
-			<button id="micBtn" class="btn">🎤 Голос</button>
+			<button id="micBtn" class="btn">Голос</button>
 		</div>
 
 		<div id="profileBox">
@@ -175,17 +185,19 @@
 				id="p_own">—</span>
 		</div>
 
-		<button id="downloadBtn" class="btn">📥 Завантажити аналітичний звіт та заявку (Word)</button>
-		<button id="resetBtn" class="btn">🔄 Почати нову заявку (скинути сесію)</button>
+		<button id="downloadBtn" class="btn">Завантажити аналітичний звіт та заявку (Word)</button>
+		<button id="resetBtn" class="btn">Почати нову заявку (скинути сесію)</button>
 	</div>
 
 	<script>
+		// Чекаємо повного завантаження DOM перед ініціалізацією
 		document.addEventListener("DOMContentLoaded", () => {
 			const BACKEND_URL = "https://" + "agrogrant.onrender.com";
 
-			// Фоновий розігрів сервера при відкритті сторінки
+			// Фоновий розігрів сервера при відкритті сторінки (щоб уникнути довгого старту)
 			fetch(`${BACKEND_URL}/`).catch(() => { });
 
+			// Генерація унікального ідентифікатора сесії користувача
 			function uuidv4() {
 				return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
 					const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -193,12 +205,14 @@
 				});
 			}
 
+			// Перевірка або створення нової сесії в localStorage
 			let userId = localStorage.getItem('agrogrant_user_id');
 			if (!userId) {
 				userId = uuidv4();
 				localStorage.setItem('agrogrant_user_id', userId);
 			}
 
+			// Отримання посилань на HTML-елементи
 			const chatbox = document.getElementById('chatbox');
 			const textInput = document.getElementById('textInput');
 			const sendBtn = document.getElementById('sendBtn');
@@ -206,21 +220,24 @@
 			const downloadBtn = document.getElementById('downloadBtn');
 			const resetBtn = document.getElementById('resetBtn');
 
+			// Глобальні змінні для контролю стану мікрофона та відправки
 			let isRecording = false;
 			let isSending = false;
 			let finalTranscript = '';
 			let silenceTimer = null;
-			const SILENCE_DELAY = 3500;
+			const SILENCE_DELAY = 3500; // Пауза 3.5 сек для авто-відправки голосу
 
+			// Функція для додавання нового повідомлення у вікно чату
 			function addMessage(sender, text, isError = false) {
 				if (!chatbox) return;
 				const div = document.createElement('div');
 				div.className = 'msg ' + (isError ? 'error' : (sender === 'Ви' ? 'user' : 'bot'));
 				div.innerHTML = `<strong>${sender}:</strong><br>${text}`;
 				chatbox.appendChild(div);
-				chatbox.scrollTop = chatbox.scrollHeight;
+				chatbox.scrollTop = chatbox.scrollHeight; // Автопрокрутка вниз
 			}
 
+			// Функція для оновлення текстових полів у картці профілю підприємства
 			function updateProfileUI(p) {
 				const map = {
 					'p_edrpou': p && p.edrpou,
@@ -239,9 +256,10 @@
 				}
 			}
 
+			// Головна функція відправки повідомлення на бекенд (FastAPI)
 			async function sendMessage(text) {
 				const cleanText = text.trim();
-				if (!cleanText || isSending) return;
+				if (!cleanText || isSending) return; // Захист від подвійної відправки
 
 				isSending = true;
 				addMessage('Ви', cleanText);
@@ -249,6 +267,7 @@
 				finalTranscript = '';
 
 				try {
+					// Відправка POST-запиту з текстом користувача
 					const response = await fetch(`${BACKEND_URL}/chat/${userId}`, {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
@@ -260,12 +279,14 @@
 						throw new Error(`Помилка сервера (${response.status}): ${errText}`);
 					}
 
+					// Обробка відповіді від сервера (Gemini + БД)
 					const data = await response.json();
 					addMessage('AgroGrant', data.reply, data.is_error);
 					updateProfileUI(data.profile);
 
+					// Відтворення відповіді бота голосом, якщо немає помилок
 					if (!data.is_error && window.speechSynthesis) {
-						window.speechSynthesis.cancel();
+						window.speechSynthesis.cancel(); // Зупиняємо попереднє озвучення
 						const utterance = new SpeechSynthesisUtterance(data.reply);
 						utterance.lang = 'uk-UA';
 						window.speechSynthesis.speak(utterance);
@@ -274,18 +295,20 @@
 					console.error('Fetch error:', error);
 					addMessage('Помилка', error.message || 'Не вдалося з\'єднатися із сервером.', true);
 				} finally {
-					isSending = false;
+					isSending = false; // Звільняємо блокування відправки
 				}
 			}
 
+			// Обробник кнопки завантаження Word-документа
 			if (downloadBtn) {
 				downloadBtn.addEventListener('click', async () => {
 					const origText = downloadBtn.textContent;
-					downloadBtn.disabled = true;
-					downloadBtn.textContent = '⏳ Формую аналітичний звіт Word...';
+					downloadBtn.disabled = true; // Блокуємо кнопку на час генерації
+					downloadBtn.textContent = 'Формую аналітичний звіт Word...'; // Прибрано емодзі
 
 					try {
 						let resp = await fetch(`${BACKEND_URL}/export/${userId}`);
+						// Якщо Render повертає 503 (пробудження), робимо повторний запит через 4 сек
 						if (resp.status === 503) {
 							await new Promise(r => setTimeout(r, 4000));
 							resp = await fetch(`${BACKEND_URL}/export/${userId}`);
@@ -293,6 +316,7 @@
 						if (!resp.ok) {
 							throw new Error(`Код відповіді сервера: ${resp.status}`);
 						}
+						// Завантаження бінарного файлу (Blob) без переходу сторінки
 						const blob = await resp.blob();
 						const url = window.URL.createObjectURL(blob);
 						const a = document.createElement('a');
@@ -311,6 +335,7 @@
 				});
 			}
 
+			// Обробник кнопки скидання поточної сесії
 			if (resetBtn) {
 				resetBtn.addEventListener('click', () => {
 					if (confirm("Ви дійсно хочете скинути поточну сесію та почати нову заявку?")) {
@@ -324,8 +349,10 @@
 				});
 			}
 
+			// Ініціалізація розпізнавання голосу (Web Speech API)
 			const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 			if (!SpeechRecognition) {
+				// Якщо браузер не підтримує голос (наприклад, Firefox без налаштувань)
 				if (micBtn) {
 					micBtn.disabled = true;
 					micBtn.textContent = 'Мікрофон недоступний';
@@ -339,9 +366,10 @@
 			} else {
 				const recognition = new SpeechRecognition();
 				recognition.lang = 'uk-UA';
-				recognition.continuous = true;
-				recognition.interimResults = true;
+				recognition.continuous = true; // Безперервне слухання
+				recognition.interimResults = true; // Проміжні результати тексту
 
+				// Зупинка запису та ініціалізація відправки
 				function stopRecordingAndSend() {
 					clearTimeout(silenceTimer);
 					if (isRecording) {
@@ -349,7 +377,7 @@
 						try { recognition.stop(); } catch (e) { }
 					}
 					if (micBtn) {
-						micBtn.textContent = '🎤 Голос';
+						micBtn.textContent = 'Голос'; // Прибрано емодзі
 						micBtn.classList.remove('recording');
 					}
 
@@ -359,6 +387,7 @@
 					}
 				}
 
+				// Керування записом голосу по кліку на мікрофон
 				if (micBtn) {
 					micBtn.addEventListener('click', () => {
 						if (isRecording) {
@@ -368,12 +397,13 @@
 							finalTranscript = (textInput && textInput.value) ? textInput.value + ' ' : '';
 							isRecording = true;
 							try { recognition.start(); } catch (e) { }
-							micBtn.textContent = '⏹️ Готово';
+							micBtn.textContent = 'Готово'; // Прибрано емодзі
 							micBtn.classList.add('recording');
 						}
 					});
 				}
 
+				// Обробка відправки через кнопку "Надіслати"
 				if (sendBtn) {
 					sendBtn.addEventListener('click', () => {
 						if (isRecording) {
@@ -384,6 +414,7 @@
 					});
 				}
 
+				// Обробка відправки клавішею Enter
 				if (textInput) {
 					textInput.addEventListener('keydown', (e) => {
 						if (e.key === 'Enter') {
@@ -393,8 +424,9 @@
 					});
 				}
 
+				// Подія отримання проміжних або фінальних результатів мовлення
 				recognition.onresult = (event) => {
-					clearTimeout(silenceTimer);
+					clearTimeout(silenceTimer); // Скидаємо таймер тиші при кожному новому слові
 					let interimTranscript = '';
 					for (let i = event.resultIndex; i < event.results.length; ++i) {
 						if (event.results[i].isFinal) {
@@ -407,23 +439,26 @@
 						textInput.value = (finalTranscript + interimTranscript).trim();
 					}
 
+					// Якщо користувач мовчить 3.5 сек, автоматично відправляємо текст
 					silenceTimer = setTimeout(() => {
 						stopRecordingAndSend();
 					}, SILENCE_DELAY);
 				};
 
+				// Перезапуск мікрофона, якщо він вимкнувся сам, але запис ще активний
 				recognition.onend = () => {
 					if (isRecording) {
 						try { recognition.start(); } catch (e) { }
 					}
 				};
 
+				// Обробка помилок мікрофона
 				recognition.onerror = (event) => {
-					if (event.error === 'no-speech') return;
+					if (event.error === 'no-speech') return; // Ігноруємо відсутність звуку
 					clearTimeout(silenceTimer);
 					isRecording = false;
 					if (micBtn) {
-						micBtn.textContent = '🎤 Голос';
+						micBtn.textContent = 'Голос'; // Прибрано емодзі
 						micBtn.classList.remove('recording');
 					}
 					addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
