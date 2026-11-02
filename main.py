@@ -262,11 +262,12 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
             "own_contribution_percent": db_profile.own_contribution_percent
         }
 
-        scored = evaluate_grants(current_profile)
+        # Первинний розрахунок скорингу для передачі моделі ШІ
+        scored_for_llm = evaluate_grants(current_profile)
         top_grants_hint = (
             f" [Топ рекомендованих грантів за скорингом зараз: "
-            f"1) {scored[0]['title']} (сумісність {scored[0]['score']}%, {scored[0]['max_amount']}); "
-            f"2) {scored[1]['title']} (сумісність {scored[1]['score']}%).]"
+            f"1) {scored_for_llm[0]['title']} (сумісність {scored_for_llm[0]['score']}%, {scored_for_llm[0]['max_amount']}); "
+            f"2) {scored_for_llm[1]['title']} (сумісність {scored_for_llm[1]['score']}%).]"
         )
 
         enriched_message = request.message + edrpou_note + top_grants_hint
@@ -284,9 +285,13 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
         if updated:
             db.commit()
 
+        # Фінальний розрахунок скорингу з урахуванням нових даних від ШІ (передаємо на фронтенд)
+        final_scored = evaluate_grants(current_profile)
+
         return {
             "reply": llm_response.get("reply", "Дані оновлено."),
             "profile": current_profile,
+            "grants": final_scored,
             "is_error": llm_response.get("is_error", False)
         }
     except Exception as e:

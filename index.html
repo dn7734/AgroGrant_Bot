@@ -157,6 +157,49 @@
 			font-weight: 600;
 			color: #198754;
 		}
+
+		/* Новий блок відображення відсотків сумісності грантів */
+		#grantsBox {
+			background: white;
+			padding: 12px 15px;
+			border-radius: 10px;
+			text-align: left;
+			font-size: 14px;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+			margin-top: 10px;
+			display: none;
+		}
+
+		.grant-item {
+			border-bottom: 1px solid #eee;
+			padding-bottom: 10px;
+			margin-bottom: 10px;
+		}
+
+		.grant-item:last-child {
+			border-bottom: none;
+			padding-bottom: 0;
+			margin-bottom: 0;
+		}
+
+		.grant-score {
+			font-weight: bold;
+			color: #198754;
+			font-size: 15px;
+			float: right;
+		}
+
+		.grant-title {
+			font-weight: 600;
+			color: #333;
+			margin-bottom: 4px;
+			padding-right: 50px;
+		}
+
+		.grant-details {
+			font-size: 13px;
+			color: #666;
+		}
 	</style>
 </head>
 
@@ -170,7 +213,6 @@
 
 		<div class="controls">
 			<input type="text" id="textInput" placeholder="Говоріть у мікрофон або введіть текст / ЄДРПОУ..." />
-			<!-- Прибрано емодзі з кнопок -->
 			<button id="sendBtn" class="btn">Надіслати</button>
 			<button id="micBtn" class="btn">Голос</button>
 		</div>
@@ -183,6 +225,12 @@
 				id="p_size">—</span><br>
 			Працівники: <span id="p_emp">—</span> | Інвестиції: <span id="p_focus">—</span> | Внесок: <span
 				id="p_own">—</span>
+		</div>
+
+		<!-- Динамічний блок для списку доступних грантів -->
+		<div id="grantsBox">
+			<strong>Сумісність із доступними грантовими програмами:</strong>
+			<div id="grantsList" style="margin-top: 10px;"></div>
 		</div>
 
 		<button id="downloadBtn" class="btn">Завантажити аналітичний звіт та заявку (Word)</button>
@@ -256,6 +304,38 @@
 				}
 			}
 
+			// Функція відображення списку грантів із відсотком сумісності
+			function updateGrantsUI(grants) {
+				const box = document.getElementById('grantsBox');
+				const list = document.getElementById('grantsList');
+				if (!box || !list) return;
+
+				if (!grants || grants.length === 0) {
+					box.style.display = 'none';
+					return;
+				}
+
+				box.style.display = 'block';
+				list.innerHTML = '';
+
+				grants.forEach(g => {
+					const div = document.createElement('div');
+					div.className = 'grant-item';
+
+					// Зміна кольору відсотка залежно від сумісності
+					let scoreColor = '#198754'; // Зелений (висока)
+					if (g.score < 75) scoreColor = '#fd7e14'; // Оранжевий (середня)
+					if (g.score < 40) scoreColor = '#dc3545'; // Червоний (низька)
+
+					div.innerHTML = `
+                        <div class="grant-score" style="color: ${scoreColor}">${g.score}%</div>
+                        <div class="grant-title">${g.title}</div>
+                        <div class="grant-details">Макс. сума: ${g.max_amount} | ${g.reason}</div>
+                    `;
+					list.appendChild(div);
+				});
+			}
+
 			// Головна функція відправки повідомлення на бекенд (FastAPI)
 			async function sendMessage(text) {
 				const cleanText = text.trim();
@@ -283,6 +363,7 @@
 					const data = await response.json();
 					addMessage('AgroGrant', data.reply, data.is_error);
 					updateProfileUI(data.profile);
+					updateGrantsUI(data.grants); // Оновлюємо таблицю сумісності грантів
 
 					// Відтворення відповіді бота голосом, якщо немає помилок
 					if (!data.is_error && window.speechSynthesis) {
@@ -304,7 +385,7 @@
 				downloadBtn.addEventListener('click', async () => {
 					const origText = downloadBtn.textContent;
 					downloadBtn.disabled = true; // Блокуємо кнопку на час генерації
-					downloadBtn.textContent = 'Формую аналітичний звіт Word...'; // Прибрано емодзі
+					downloadBtn.textContent = 'Формую аналітичний звіт Word...';
 
 					try {
 						let resp = await fetch(`${BACKEND_URL}/export/${userId}`);
@@ -344,6 +425,7 @@
 						localStorage.setItem('agrogrant_user_id', userId);
 						if (chatbox) chatbox.innerHTML = '';
 						updateProfileUI(null);
+						updateGrantsUI(null); // Очищаємо список грантів
 						addMessage('Система', 'Сесію скинуто. Введіть новий код ЄДРПОУ або розкажіть про підприємство.');
 					}
 				});
@@ -377,7 +459,7 @@
 						try { recognition.stop(); } catch (e) { }
 					}
 					if (micBtn) {
-						micBtn.textContent = 'Голос'; // Прибрано емодзі
+						micBtn.textContent = 'Голос';
 						micBtn.classList.remove('recording');
 					}
 
@@ -397,7 +479,7 @@
 							finalTranscript = (textInput && textInput.value) ? textInput.value + ' ' : '';
 							isRecording = true;
 							try { recognition.start(); } catch (e) { }
-							micBtn.textContent = 'Готово'; // Прибрано емодзі
+							micBtn.textContent = 'Готово';
 							micBtn.classList.add('recording');
 						}
 					});
@@ -458,7 +540,7 @@
 					clearTimeout(silenceTimer);
 					isRecording = false;
 					if (micBtn) {
-						micBtn.textContent = 'Голос'; // Прибрано емодзі
+						micBtn.textContent = 'Голос';
 						micBtn.classList.remove('recording');
 					}
 					addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
