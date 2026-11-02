@@ -90,6 +90,11 @@
 			white-space: nowrap;
 		}
 
+		.btn:disabled {
+			opacity: 0.65;
+			cursor: wait;
+		}
+
 		#sendBtn {
 			background-color: #0d6efd;
 		}
@@ -123,6 +128,7 @@
 			font-size: 14px;
 			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
 			margin-top: 10px;
+			line-height: 1.6;
 		}
 
 		#profileBox span {
@@ -149,31 +155,36 @@
 <body>
 	<div class="container">
 		<h1>🎙️ AgroGrant Assistant</h1>
-		<p>Розкажіть голосом (пауза 3.5 с для авто-відправки) або напишіть текстом</p>
+		<p>Назвіть код ЄДРПОУ (наприклад, 03728915) або розкажіть про своє агропідприємство</p>
 
 		<div id="chatbox"></div>
 
 		<div class="controls">
-			<input type="text" id="textInput" placeholder="Говоріть у мікрофон або введіть текст..." />
+			<input type="text" id="textInput" placeholder="Говоріть у мікрофон або введіть текст / ЄДРПОУ..." />
 			<button id="sendBtn" class="btn">Надіслати</button>
-			<button id="micBtn" class="btn">Голос</button>
+			<button id="micBtn" class="btn">🎤 Голос</button>
 		</div>
 
 		<div id="profileBox">
-			<strong>Зібрані дані підприємства:</strong><br>
+			<strong>Зібрані дані підприємства (ЄДР + Анкета):</strong><br>
+			ЄДРПОУ: <span id="p_edrpou">—</span> | Назва: <span id="p_company">—</span> | КВЕД: <span
+				id="p_kved">—</span><br>
 			Регіон: <span id="p_region">—</span> | Діяльність: <span id="p_activity">—</span> | Розмір: <span
 				id="p_size">—</span><br>
 			Працівники: <span id="p_emp">—</span> | Інвестиції: <span id="p_focus">—</span> | Внесок: <span
 				id="p_own">—</span>
 		</div>
 
-		<button id="downloadBtn" class="btn">Завантажити грантову заявку (Word)</button>
-		<button id="resetBtn" class="btn">Почати нову заявку (скинути сесію)</button>
+		<button id="downloadBtn" class="btn">📥 Завантажити аналітичний звіт та заявку (Word)</button>
+		<button id="resetBtn" class="btn">🔄 Почати нову заявку (скинути сесію)</button>
 	</div>
 
 	<script>
 		document.addEventListener("DOMContentLoaded", () => {
 			const BACKEND_URL = "https://" + "agrogrant.onrender.com";
+
+			// Фоновий розігрів сервера при відкритті сторінки
+			fetch(`${BACKEND_URL}/`).catch(() => { });
 
 			function uuidv4() {
 				return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -211,19 +222,21 @@
 			}
 
 			function updateProfileUI(p) {
-				const reg = document.getElementById('p_region');
-				const act = document.getElementById('p_activity');
-				const sz = document.getElementById('p_size');
-				const emp = document.getElementById('p_emp');
-				const foc = document.getElementById('p_focus');
-				const own = document.getElementById('p_own');
-
-				if (reg) reg.textContent = p && p.region ? p.region : '—';
-				if (act) act.textContent = p && p.activity_type ? p.activity_type : '—';
-				if (sz) sz.textContent = p && p.size_category ? p.size_category : '—';
-				if (emp) emp.textContent = p && p.employees_count ? p.employees_count : '—';
-				if (foc) foc.textContent = p && p.investment_focus ? p.investment_focus : '—';
-				if (own) own.textContent = p && p.own_contribution_percent ? p.own_contribution_percent : '—';
+				const map = {
+					'p_edrpou': p && p.edrpou,
+					'p_company': p && p.company_name,
+					'p_kved': p && p.kved,
+					'p_region': p && p.region,
+					'p_activity': p && p.activity_type,
+					'p_size': p && p.size_category,
+					'p_emp': p && p.employees_count,
+					'p_focus': p && p.investment_focus,
+					'p_own': p && p.own_contribution_percent
+				};
+				for (const [id, val] of Object.entries(map)) {
+					const el = document.getElementById(id);
+					if (el) el.textContent = val || '—';
+				}
 			}
 
 			async function sendMessage(text) {
@@ -266,8 +279,35 @@
 			}
 
 			if (downloadBtn) {
-				downloadBtn.addEventListener('click', () => {
-					window.location.href = `${BACKEND_URL}/export/${userId}`;
+				downloadBtn.addEventListener('click', async () => {
+					const origText = downloadBtn.textContent;
+					downloadBtn.disabled = true;
+					downloadBtn.textContent = '⏳ Формую аналітичний звіт Word...';
+
+					try {
+						let resp = await fetch(`${BACKEND_URL}/export/${userId}`);
+						if (resp.status === 503) {
+							await new Promise(r => setTimeout(r, 4000));
+							resp = await fetch(`${BACKEND_URL}/export/${userId}`);
+						}
+						if (!resp.ok) {
+							throw new Error(`Код відповіді сервера: ${resp.status}`);
+						}
+						const blob = await resp.blob();
+						const url = window.URL.createObjectURL(blob);
+						const a = document.createElement('a');
+						a.href = url;
+						a.download = 'AgroGrant_Analytical_Report.docx';
+						document.body.appendChild(a);
+						a.click();
+						a.remove();
+						window.URL.revokeObjectURL(url);
+					} catch (err) {
+						addMessage('Помилка', 'Не вдалося завантажити файл: ' + err.message, true);
+					} finally {
+						downloadBtn.disabled = false;
+						downloadBtn.textContent = origText;
+					}
 				});
 			}
 
@@ -279,7 +319,7 @@
 						localStorage.setItem('agrogrant_user_id', userId);
 						if (chatbox) chatbox.innerHTML = '';
 						updateProfileUI(null);
-						addMessage('Система', 'Сесію скинуто. Розкажіть про нове підприємство.');
+						addMessage('Система', 'Сесію скинуто. Введіть новий код ЄДРПОУ або розкажіть про підприємство.');
 					}
 				});
 			}

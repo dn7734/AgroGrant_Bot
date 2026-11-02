@@ -2,7 +2,7 @@ import os
 import re
 import uuid
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -72,7 +72,6 @@ class GrantProgram(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# Безпечна автоміграція існуючої таблиці enterprise_profiles у Neon DB
 with engine.connect() as conn:
     for col in ["edrpou", "company_name", "kved"]:
         try:
@@ -154,8 +153,6 @@ def lookup_or_create_edrpou(db, code: str) -> EDRPOURegistry:
     record = db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == code).first()
     if record:
         return record
-    # Гібридний демо-режим: якщо введено будь-який новий 8-значний код ЄДРПОУ під час презентації,
-    # автоматично реєструємо типовий профіль агропідприємства в базі
     fallback = EDRPOURegistry(
         edrpou=code,
         company_name=f"ФГ «АГРО-ЛАН {code[:4]}»",
@@ -185,9 +182,9 @@ llm_service = LLMService()
 class ChatRequest(BaseModel):
     message: str
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def health_check():
-    return {"status": "ok", "service": "AgroGrant API (EDRPOU + Grant Scoring enabled)"}
+    return {"status": "ok", "service": "AgroGrant API"}
 
 @app.get("/edrpou/{code}")
 def get_edrpou_info(code: str):
@@ -212,12 +209,8 @@ def get_edrpou_info(code: str):
 
 @app.get("/grants/sync")
 async def sync_grants():
-    db = SessionLocal()
-    try:
-        grants = await scrape_and_normalize_grants(llm_service.api_key)
-        return {"status": "synced", "count": len(grants), "grants": grants}
-    finally:
-        db.close()
+    grants = await scrape_and_normalize_grants(llm_service.api_key)
+    return {"status": "synced", "count": len(grants), "grants": grants}
 
 @app.post("/chat/{user_id}")
 async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
@@ -236,7 +229,6 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
             db.commit()
             db.refresh(db_profile)
 
-        # Автоматичний пошук 8-значного коду ЄДРПОУ в повідомленні користувача
         edrpou_match = re.search(r"\b(\d{8})\b", request.message)
         edrpou_note = ""
         if edrpou_match:
@@ -245,8 +237,8 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
             db_profile.edrpou = reg_company.edrpou
             db_profile.company_name = reg_company.company_name
             db_profile.kved = reg_company.kved
-            db_profile.region = f"{reg_company.region} ({reg_company.company_name})"
-            db_profile.activity_type = f"{reg_company.activity_type} [КВЕД {reg_company.kved[:5]}]"
+            db_profile.region = reg_company.region
+            db_profile.activity_type = reg_company.activity_type
             db_profile.size_category = reg_company.size_category
             db_profile.employees_count = reg_company.employees_count
             db.commit()
@@ -285,9 +277,6 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
         if isinstance(extracted_data, dict):
             for key, value in extracted_data.items():
                 if value is not None and hasattr(db_profile, key) and getattr(db_profile, key) != str(value):
-                    # Не перезаписуємо вже підтягнуту назву компанії в полі region, якщо воно вже містить назву з ЄДРПОУ
-                    if key == "region" and db_profile.edrpou and db_profile.company_name and db_profile.company_name in (db_profile.region or ""):
-                        continue
                     setattr(db_profile, key, str(value))
                     current_profile[key] = str(value)
                     updated = True
@@ -307,7 +296,7 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
     finally:
         db.close()
 
-@app.get("/export/{user_id}")
+@app.api_route("/export/{user_id}", methods=["GET", "HEAD"])
 def export_grant(user_id: uuid.UUID):
     db = SessionLocal()
     try:
