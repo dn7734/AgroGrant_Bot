@@ -206,11 +206,49 @@ def get_edrpou_info(code: str):
         }
     finally:
         db.close()
+def get_grants_from_db(db):
+    db_grants = db.query(GrantProgram).all()
+    grants_list = []
+    for g in db_grants:
+        grants_list.append({
+            "code": g.code,
+            "title": g.title,
+            "donor": g.donor,
+            "max_amount": g.max_amount,
+            "min_own_percent": g.min_own_percent,
+            "target_kveds": g.target_kveds,
+            "land_req": g.land_req,
+            "keywords": g.keywords.split(",") if g.keywords else [],
+            "requirements": g.requirements
+        })
+    return grants_list
 
 @app.get("/grants/sync")
 async def sync_grants():
-    grants = await scrape_and_normalize_grants(llm_service.api_key)
-    return {"status": "synced", "count": len(grants), "grants": grants}
+    db = SessionLocal()
+    try:
+        grants = await scrape_and_normalize_grants(llm_service.api_key)
+        added = 0
+        for g in grants:
+            exists = db.query(GrantProgram).filter(GrantProgram.code == g["code"]).first()
+            if not exists:
+                new_prog = GrantProgram(
+                    code=g["code"],
+                    title=g["title"],
+                    donor=g["donor"],
+                    max_amount=g["max_amount"],
+                    min_own_percent=int(g.get("min_own_percent", 0)),
+                    target_kveds=g.get("target_kveds", ""),
+                    land_req=g.get("land_req", ""),
+                    keywords=",".join(g.get("keywords", [])) if isinstance(g.get("keywords"), list) else g.get("keywords", ""),
+                    requirements=g.get("requirements", "")
+                )
+                db.add(new_prog)
+                added += 1
+        db.commit()
+        return {"status": "synced", "total_parsed": len(grants), "new_added": added}
+    finally:
+        db.close()
 
 @app.post("/chat/{user_id}")
 async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
@@ -243,11 +281,8 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
             db_profile.employees_count = reg_company.employees_count
             db.commit()
             edrpou_note = (
-                f" [СИСТЕМНЕ ПОВІДОМЛЕННЯ: У реєстрі ЄДРПОУ знайдено підприємство за кодом {found_code}: "
-                f"{reg_company.company_name}, КВЕД {reg_company.kved}, {reg_company.region}, "
-                f"{reg_company.size_category}, {reg_company.employees_count}. "
-                f"Повідом користувача, що ці реєстраційні дані підтягнуто автоматично, і запитай лише про "
-                f"бажаний напрям інвестицій (investment_focus) та відсоток власного внеску (own_contribution_percent).]"
+                f" [СИСТЕМНЕ ПОВІДОМЛЕННЯ: Підтягнуто ЄДРПОУ {found_code}: {reg_company.company_name}, "
+                f"КВЕД {reg_company.kved}. Запитай лише про напрям інвестицій та % власного внеску.]"
             )
 
         current_profile = {
@@ -262,13 +297,16 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
             "own_contribution_percent": db_profile.own_contribution_percent
         }
 
-        # Первинний розрахунок скорингу для передачі моделі ШІ
-        scored_for_llm = evaluate_grants(current_profile)
-        top_grants_hint = (
-            f" [Топ рекомендованих грантів за скорингом зараз: "
-            f"1) {scored_for_llm[0]['title']} (сумісність {scored_for_llm[0]['score']}%, {scored_for_llm[0]['max_amount']}); "
-            f"2) {scored_for_llm[1]['title']} (сумісність {scored_for_llm[1]['score']}%).]"
-        )
+        # Отримуємо гранти з бази для скорингу
+        grants_list = get_grants_from_db(db)
+        scored_for_llm = evaluate_grants(current_profile, grants_list)
+        
+        top_grants_hint = ""
+        if scored_for_llm:
+            top_grants_hint = (
+                f" [Рекомендації: 1) {scored_for_llm[0]['title']} (сумісність {scored_for_llm[0]['score']}%); "
+                f"2) {scored_for_llm[1]['title'] if len(scored_for_llm) > 1 else ''}]"
+            )
 
         enriched_message = request.message + edrpou_note + top_grants_hint
         llm_response = await llm_service.generate_response(enriched_message, current_profile)
@@ -285,8 +323,8 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
         if updated:
             db.commit()
 
-        # Фінальний розрахунок скорингу з урахуванням нових даних від ШІ (передаємо на фронтенд)
-        final_scored = evaluate_grants(current_profile)
+        # Фінальний скоринг з новими даними
+        final_scored = evaluate_grants(current_profile, grants_list)
 
         return {
             "reply": llm_response.get("reply", "Дані оновлено."),
@@ -317,7 +355,8 @@ def export_grant(user_id: uuid.UUID):
             "investment_focus": db_profile.investment_focus if db_profile else None,
             "own_contribution_percent": db_profile.own_contribution_percent if db_profile else None
         }
-        doc_stream = create_grant_document(profile_data)
+        grants_list = get_grants_from_db(db)
+        doc_stream = create_grant_document(profile_data, grants_list)
         return StreamingResponse(
             doc_stream,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
