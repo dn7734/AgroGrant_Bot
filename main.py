@@ -364,3 +364,22 @@ def export_grant(user_id: uuid.UUID):
         )
     finally:
         db.close()
+
+@app.get("/api/stats")
+def get_admin_stats():
+    db = SessionLocal()
+    try:
+        profiles = db.query(EnterpriseProfile).all()
+        regions, activities = {}, {}
+        for p in profiles:
+            reg = p.region.split("(")[0].strip() if p.region else "Не вказано"
+            act = p.activity_type.split("[")[0].strip() if p.activity_type else "Не вказано"
+            regions[reg] = regions.get(reg, 0) + 1
+            activities[act] = activities.get(act, 0) + 1
+        return {
+            "total": len(profiles),
+            "regions": regions,
+            "activities": activities
+        }
+    finally:
+        db.close()

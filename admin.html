@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>AgroGrant - Дашборд</title>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<style>
+		body {
+			font-family: 'Segoe UI', Tahoma, sans-serif;
+			background: #f4f7f6;
+			padding: 20px;
+			text-align: center;
+		}
+
+		.container {
+			max-width: 900px;
+			margin: 0 auto;
+		}
+
+		.charts {
+			display: flex;
+			gap: 20px;
+			flex-wrap: wrap;
+			justify-content: center;
+			margin-top: 20px;
+		}
+
+		.chart-box {
+			background: white;
+			padding: 20px;
+			border-radius: 10px;
+			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+			width: 400px;
+		}
+
+		h1 {
+			color: #198754;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<h1>📊 Макроаналітика AgroGrant</h1>
+		<p>Загалом опрацьовано анкет: <strong id="totalCount">0</strong></p>
+		<div class="charts">
+			<div class="chart-box"><canvas id="regionChart"></canvas></div>
+			<div class="chart-box"><canvas id="activityChart"></canvas></div>
+		</div>
+	</div>
+	<script>
+		const BACKEND_URL = "https://" + "agrogrant.onrender.com";
+
+		async function loadStats() {
+			try {
+				const res = await fetch(`${BACKEND_URL}/api/stats`);
+				const data = await res.json();
+				document.getElementById('totalCount').textContent = data.total;
+
+				new Chart(document.getElementById('regionChart'), {
+					type: 'pie',
+					data: {
+						labels: Object.keys(data.regions),
+						datasets: [{ data: Object.values(data.regions), backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1'] }]
+					},
+					options: { plugins: { title: { display: true, text: 'Розподіл за регіонами' } } }
+				});
+
+				new Chart(document.getElementById('activityChart'), {
+					type: 'bar',
+					data: {
+						labels: Object.keys(data.activities),
+						datasets: [{ label: 'Кількість', data: Object.values(data.activities), backgroundColor: '#198754' }]
+					},
+					options: { plugins: { title: { display: true, text: 'Популярні напрямки (КВЕД)' } } }
+				});
+			} catch (e) { console.error("Помилка завантаження статистики", e); }
+		}
+		loadStats();
+	</script>
+</body>
+
+</html>
