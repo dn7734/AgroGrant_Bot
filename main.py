@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+import httpx
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -150,22 +151,41 @@ def seed_initial_data():
 seed_initial_data()
 
 def lookup_or_create_edrpou(db, code: str) -> EDRPOURegistry:
+    # 1. Шукаємо в нашій локальній БД
     record = db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == code).first()
     if record:
         return record
-    fallback = EDRPOURegistry(
+    
+    # 2. Якщо немає - робимо запит до Opendatabot API
+    company_name = f"Підприємство №{code}"
+    status = "Зареєстровано"
+    
+    try:
+        # Безкоштовний відкритий ендпоінт для базової інформації
+        url = f"https://opendatabot.com/api/v2/company/{code}"
+        response = httpx.get(url, timeout=5.0)
+        if response.status_code == 200:
+            data = response.json()
+            company_name = data.get("name", company_name)
+            status = data.get("status", status)
+    except Exception as e:
+        print(f"Opendatabot API error: {e}")
+
+    # 3. Створюємо новий запис з реальними даними
+    new_company = EDRPOURegistry(
         edrpou=code,
-        company_name=f"ФГ «АГРО-ЛАН {code[:4]}»",
-        kved="01.11 Вирощування зернових культур (крім рису), бобових і насіння олійних культур",
-        region="Вінницька область",
-        activity_type="Рослинництво та переробка агропродукції",
-        size_category="Мале агропідприємство (120 га)",
-        employees_count="8 працівників"
+        company_name=company_name,
+        kved="Не вказано (потребує уточнення)",
+        region="Не вказано",
+        activity_type="Не вказано",
+        size_category="Не вказано",
+        employees_count="Не вказано",
+        status=status
     )
-    db.add(fallback)
+    db.add(new_company)
     db.commit()
-    db.refresh(fallback)
-    return fallback
+    db.refresh(new_company)
+    return new_company
 
 app = FastAPI()
 
