@@ -5,7 +5,6 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>AgroGrant Assistant</title>
-	<!-- Підключення бібліотеки для графіків -->
 	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="icon"
 		href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=">
@@ -37,6 +36,7 @@
 			flex-direction: column;
 			gap: 10px;
 			box-sizing: border-box;
+			scroll-behavior: smooth;
 		}
 
 		.msg {
@@ -63,6 +63,46 @@
 			align-self: center;
 			color: #842029;
 			font-size: 13px;
+		}
+
+		/* Анімація "Бот друкує..." */
+		.typing-indicator {
+			display: flex;
+			gap: 5px;
+			padding: 5px 0;
+			align-items: center;
+			height: 20px;
+		}
+
+		.typing-indicator span {
+			width: 8px;
+			height: 8px;
+			background-color: #6c757d;
+			border-radius: 50%;
+			animation: bounce 1.4s infinite ease-in-out both;
+		}
+
+		.typing-indicator span:nth-child(1) {
+			animation-delay: -0.32s;
+		}
+
+		.typing-indicator span:nth-child(2) {
+			animation-delay: -0.16s;
+		}
+
+		@keyframes bounce {
+
+			0%,
+			80%,
+			100% {
+				transform: scale(0);
+				opacity: 0.4;
+			}
+
+			40% {
+				transform: scale(1);
+				opacity: 1;
+			}
 		}
 
 		.controls {
@@ -152,7 +192,6 @@
 			color: #198754;
 		}
 
-		/* Стилі для блоку грантів та графіка */
 		#grantsBox {
 			background: white;
 			padding: 12px 15px;
@@ -265,6 +304,7 @@
 			let finalTranscript = '';
 			let silenceTimer = null;
 			let finChart = null;
+			let loadingBubble = null; // Посилання на бульбашку завантаження
 			const SILENCE_DELAY = 3500;
 
 			function addMessage(sender, text, isError = false) {
@@ -274,6 +314,24 @@
 				div.innerHTML = `<strong>${sender}:</strong><br>${text}`;
 				chatbox.appendChild(div);
 				chatbox.scrollTop = chatbox.scrollHeight;
+			}
+
+			// Функція для показу анімації очікування
+			function showTypingIndicator() {
+				if (!chatbox) return;
+				loadingBubble = document.createElement('div');
+				loadingBubble.className = 'msg bot';
+				loadingBubble.innerHTML = `<strong>AgroGrant:</strong><br><div class="typing-indicator"><span></span><span></span><span></span></div>`;
+				chatbox.appendChild(loadingBubble);
+				chatbox.scrollTop = chatbox.scrollHeight;
+			}
+
+			// Функція для приховання анімації
+			function removeTypingIndicator() {
+				if (loadingBubble && loadingBubble.parentNode) {
+					loadingBubble.parentNode.removeChild(loadingBubble);
+					loadingBubble = null;
+				}
 			}
 
 			function updateProfileUI(p) {
@@ -294,13 +352,11 @@
 				}
 			}
 
-			// Захищена функція оновлення списку та графіка
 			function updateGrantsUI(grants, p) {
 				const box = document.getElementById('grantsBox');
 				const list = document.getElementById('grantsList');
 				if (!box || !list) return;
 
-				// Якщо грантів немає - ховаємо блок і видаляємо старий графік
 				if (!grants || grants.length === 0) {
 					box.style.display = 'none';
 					if (finChart) { finChart.destroy(); finChart = null; }
@@ -326,7 +382,6 @@
 					list.appendChild(div);
 				});
 
-				// Безпечне малювання графіка для першого гранту
 				const topGrant = grants[0];
 				let ownPct = p && p.own_contribution_percent ? parseFloat(String(p.own_contribution_percent).replace(/[^\d.]/g, '')) : topGrant.min_own_percent;
 				ownPct = Math.max(ownPct || 0, topGrant.min_own_percent);
@@ -355,12 +410,16 @@
 				if (textInput) textInput.value = '';
 				finalTranscript = '';
 
+				showTypingIndicator(); // Вмикаємо анімацію очікування
+
 				try {
 					const response = await fetch(`${BACKEND_URL}/chat/${userId}`, {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({ message: cleanText })
 					});
+
+					removeTypingIndicator(); // Прибираємо анімацію, як тільки прийшла відповідь
 
 					if (!response.ok) {
 						throw new Error(`Помилка сервера: ${response.status}`);
@@ -378,6 +437,7 @@
 						window.speechSynthesis.speak(utterance);
 					}
 				} catch (error) {
+					removeTypingIndicator(); // Прибираємо анімацію і у випадку помилки
 					console.error('Fetch error:', error);
 					addMessage('Помилка', 'Не вдалося з\'єднатися із сервером.', true);
 				} finally {
