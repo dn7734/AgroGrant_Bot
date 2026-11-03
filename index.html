@@ -5,10 +5,11 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>AgroGrant Assistant</title>
+	<!-- Підключення бібліотеки для графіків -->
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="icon"
 		href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=">
 	<style>
-		/* Базові налаштування сторінки та контейнера */
 		body {
 			font-family: 'Segoe UI', Tahoma, sans-serif;
 			text-align: center;
@@ -22,7 +23,6 @@
 			margin: 0 auto;
 		}
 
-		/* Стилізація головного вікна чату */
 		#chatbox {
 			width: 100%;
 			height: 350px;
@@ -39,7 +39,6 @@
 			box-sizing: border-box;
 		}
 
-		/* Оформлення окремих повідомлень (бульбашок) */
 		.msg {
 			padding: 10px 15px;
 			border-radius: 15px;
@@ -66,7 +65,6 @@
 			font-size: 13px;
 		}
 
-		/* Панель вводу тексту та кнопок */
 		.controls {
 			display: flex;
 			gap: 8px;
@@ -83,7 +81,6 @@
 			outline: none;
 		}
 
-		/* Загальні стилі для всіх кнопок */
 		.btn {
 			padding: 12px 22px;
 			font-size: 16px;
@@ -100,7 +97,6 @@
 			cursor: wait;
 		}
 
-		/* Індивідуальні кольори кнопок */
 		#sendBtn {
 			background-color: #0d6efd;
 		}
@@ -121,7 +117,6 @@
 			width: 100%;
 		}
 
-		/* Анімація пульсації під час запису голосу */
 		#micBtn.recording {
 			background-color: #dc3545;
 			animation: pulse 1.5s infinite;
@@ -141,7 +136,6 @@
 			}
 		}
 
-		/* Панель з анкетою підприємства */
 		#profileBox {
 			background: white;
 			padding: 12px 15px;
@@ -158,7 +152,7 @@
 			color: #198754;
 		}
 
-		/* Новий блок відображення відсотків сумісності грантів */
+		/* Стилі для блоку грантів та графіка */
 		#grantsBox {
 			background: white;
 			padding: 12px 15px;
@@ -184,7 +178,6 @@
 
 		.grant-score {
 			font-weight: bold;
-			color: #198754;
 			font-size: 15px;
 			float: right;
 		}
@@ -200,14 +193,19 @@
 			font-size: 13px;
 			color: #666;
 		}
+
+		#chartContainer {
+			width: 250px;
+			height: 250px;
+			margin: 20px auto 0 auto;
+		}
 	</style>
 </head>
 
 <body>
 	<div class="container">
-		<!-- Залишаємо єдину іконку в заголовку -->
 		<h1>🎙️ AgroGrant Assistant</h1>
-		<p>Назвіть код ЄДРПОУ (наприклад, 03728915) або розкажіть про своє агропідприємство</p>
+		<p>Назвіть код ЄДРПОУ (наприклад, 03728915) або розкажіть про своє підприємство</p>
 
 		<div id="chatbox"></div>
 
@@ -218,7 +216,7 @@
 		</div>
 
 		<div id="profileBox">
-			<strong>Зібрані дані підприємства (ЄДР + Анкета):</strong><br>
+			<strong>Зібрані дані підприємства:</strong><br>
 			ЄДРПОУ: <span id="p_edrpou">—</span> | Назва: <span id="p_company">—</span> | КВЕД: <span
 				id="p_kved">—</span><br>
 			Регіон: <span id="p_region">—</span> | Діяльність: <span id="p_activity">—</span> | Розмір: <span
@@ -227,25 +225,21 @@
 				id="p_own">—</span>
 		</div>
 
-		<!-- Динамічний блок для списку доступних грантів -->
 		<div id="grantsBox">
-			<strong>Сумісність із доступними грантовими програмами:</strong>
+			<strong>Сумісність із грантовими програмами:</strong>
 			<div id="grantsList" style="margin-top: 10px;"></div>
+			<div id="chartContainer"><canvas id="financeChart"></canvas></div>
 		</div>
 
-		<button id="downloadBtn" class="btn">Завантажити аналітичний звіт та заявку (Word)</button>
+		<button id="downloadBtn" class="btn">Завантажити звіт та заявку (Word)</button>
 		<button id="resetBtn" class="btn">Почати нову заявку (скинути сесію)</button>
 	</div>
 
 	<script>
-		// Чекаємо повного завантаження DOM перед ініціалізацією
 		document.addEventListener("DOMContentLoaded", () => {
 			const BACKEND_URL = "https://" + "agrogrant.onrender.com";
-
-			// Фоновий розігрів сервера при відкритті сторінки (щоб уникнути довгого старту)
 			fetch(`${BACKEND_URL}/`).catch(() => { });
 
-			// Генерація унікального ідентифікатора сесії користувача
 			function uuidv4() {
 				return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
 					const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -253,14 +247,12 @@
 				});
 			}
 
-			// Перевірка або створення нової сесії в localStorage
 			let userId = localStorage.getItem('agrogrant_user_id');
 			if (!userId) {
 				userId = uuidv4();
 				localStorage.setItem('agrogrant_user_id', userId);
 			}
 
-			// Отримання посилань на HTML-елементи
 			const chatbox = document.getElementById('chatbox');
 			const textInput = document.getElementById('textInput');
 			const sendBtn = document.getElementById('sendBtn');
@@ -268,24 +260,22 @@
 			const downloadBtn = document.getElementById('downloadBtn');
 			const resetBtn = document.getElementById('resetBtn');
 
-			// Глобальні змінні для контролю стану мікрофона та відправки
 			let isRecording = false;
 			let isSending = false;
 			let finalTranscript = '';
 			let silenceTimer = null;
-			const SILENCE_DELAY = 3500; // Пауза 3.5 сек для авто-відправки голосу
+			let finChart = null;
+			const SILENCE_DELAY = 3500;
 
-			// Функція для додавання нового повідомлення у вікно чату
 			function addMessage(sender, text, isError = false) {
 				if (!chatbox) return;
 				const div = document.createElement('div');
 				div.className = 'msg ' + (isError ? 'error' : (sender === 'Ви' ? 'user' : 'bot'));
 				div.innerHTML = `<strong>${sender}:</strong><br>${text}`;
 				chatbox.appendChild(div);
-				chatbox.scrollTop = chatbox.scrollHeight; // Автопрокрутка вниз
+				chatbox.scrollTop = chatbox.scrollHeight;
 			}
 
-			// Функція для оновлення текстових полів у картці профілю підприємства
 			function updateProfileUI(p) {
 				const map = {
 					'p_edrpou': p && p.edrpou,
@@ -304,14 +294,16 @@
 				}
 			}
 
-			// Функція відображення списку грантів із відсотком сумісності
-			function updateGrantsUI(grants) {
+			// Захищена функція оновлення списку та графіка
+			function updateGrantsUI(grants, p) {
 				const box = document.getElementById('grantsBox');
 				const list = document.getElementById('grantsList');
 				if (!box || !list) return;
 
+				// Якщо грантів немає - ховаємо блок і видаляємо старий графік
 				if (!grants || grants.length === 0) {
 					box.style.display = 'none';
+					if (finChart) { finChart.destroy(); finChart = null; }
 					return;
 				}
 
@@ -322,10 +314,9 @@
 					const div = document.createElement('div');
 					div.className = 'grant-item';
 
-					// Зміна кольору відсотка залежно від сумісності
-					let scoreColor = '#198754'; // Зелений (висока)
-					if (g.score < 75) scoreColor = '#fd7e14'; // Оранжевий (середня)
-					if (g.score < 40) scoreColor = '#dc3545'; // Червоний (низька)
+					let scoreColor = '#198754';
+					if (g.score < 75) scoreColor = '#fd7e14';
+					if (g.score < 40) scoreColor = '#dc3545';
 
 					div.innerHTML = `
                         <div class="grant-score" style="color: ${scoreColor}">${g.score}%</div>
@@ -334,12 +325,30 @@
                     `;
 					list.appendChild(div);
 				});
+
+				// Безпечне малювання графіка для першого гранту
+				const topGrant = grants[0];
+				let ownPct = p && p.own_contribution_percent ? parseFloat(String(p.own_contribution_percent).replace(/[^\d.]/g, '')) : topGrant.min_own_percent;
+				ownPct = Math.max(ownPct || 0, topGrant.min_own_percent);
+				let grantPct = 100 - ownPct;
+
+				if (finChart) { finChart.destroy(); }
+				const ctx = document.getElementById('financeChart');
+				if (ctx) {
+					finChart = new Chart(ctx, {
+						type: 'doughnut',
+						data: {
+							labels: ['Грант (%)', 'Власний внесок (%)'],
+							datasets: [{ data: [grantPct, ownPct], backgroundColor: ['#0d6efd', '#198754'] }]
+						},
+						options: { plugins: { title: { display: true, text: 'Пропорція фінансування (найкращий грант)' } } }
+					});
+				}
 			}
 
-			// Головна функція відправки повідомлення на бекенд (FastAPI)
 			async function sendMessage(text) {
 				const cleanText = text.trim();
-				if (!cleanText || isSending) return; // Захист від подвійної відправки
+				if (!cleanText || isSending) return;
 
 				isSending = true;
 				addMessage('Ви', cleanText);
@@ -347,7 +356,6 @@
 				finalTranscript = '';
 
 				try {
-					// Відправка POST-запиту з текстом користувача
 					const response = await fetch(`${BACKEND_URL}/chat/${userId}`, {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
@@ -355,49 +363,42 @@
 					});
 
 					if (!response.ok) {
-						const errText = await response.text();
-						throw new Error(`Помилка сервера (${response.status}): ${errText}`);
+						throw new Error(`Помилка сервера: ${response.status}`);
 					}
 
-					// Обробка відповіді від сервера (Gemini + БД)
 					const data = await response.json();
 					addMessage('AgroGrant', data.reply, data.is_error);
 					updateProfileUI(data.profile);
-					updateGrantsUI(data.grants); // Оновлюємо таблицю сумісності грантів
+					updateGrantsUI(data.grants, data.profile);
 
-					// Відтворення відповіді бота голосом, якщо немає помилок
 					if (!data.is_error && window.speechSynthesis) {
-						window.speechSynthesis.cancel(); // Зупиняємо попереднє озвучення
+						window.speechSynthesis.cancel();
 						const utterance = new SpeechSynthesisUtterance(data.reply);
 						utterance.lang = 'uk-UA';
 						window.speechSynthesis.speak(utterance);
 					}
 				} catch (error) {
 					console.error('Fetch error:', error);
-					addMessage('Помилка', error.message || 'Не вдалося з\'єднатися із сервером.', true);
+					addMessage('Помилка', 'Не вдалося з\'єднатися із сервером.', true);
 				} finally {
-					isSending = false; // Звільняємо блокування відправки
+					isSending = false;
 				}
 			}
 
-			// Обробник кнопки завантаження Word-документа
 			if (downloadBtn) {
 				downloadBtn.addEventListener('click', async () => {
 					const origText = downloadBtn.textContent;
-					downloadBtn.disabled = true; // Блокуємо кнопку на час генерації
-					downloadBtn.textContent = 'Формую аналітичний звіт Word...';
+					downloadBtn.disabled = true;
+					downloadBtn.textContent = 'Формую звіт...';
 
 					try {
 						let resp = await fetch(`${BACKEND_URL}/export/${userId}`);
-						// Якщо Render повертає 503 (пробудження), робимо повторний запит через 4 сек
 						if (resp.status === 503) {
 							await new Promise(r => setTimeout(r, 4000));
 							resp = await fetch(`${BACKEND_URL}/export/${userId}`);
 						}
-						if (!resp.ok) {
-							throw new Error(`Код відповіді сервера: ${resp.status}`);
-						}
-						// Завантаження бінарного файлу (Blob) без переходу сторінки
+						if (!resp.ok) throw new Error(`Помилка ${resp.status}`);
+
 						const blob = await resp.blob();
 						const url = window.URL.createObjectURL(blob);
 						const a = document.createElement('a');
@@ -408,7 +409,7 @@
 						a.remove();
 						window.URL.revokeObjectURL(url);
 					} catch (err) {
-						addMessage('Помилка', 'Не вдалося завантажити файл: ' + err.message, true);
+						addMessage('Помилка', 'Не вдалося завантажити файл.', true);
 					} finally {
 						downloadBtn.disabled = false;
 						downloadBtn.textContent = origText;
@@ -416,42 +417,31 @@
 				});
 			}
 
-			// Обробник кнопки скидання поточної сесії
 			if (resetBtn) {
 				resetBtn.addEventListener('click', () => {
-					if (confirm("Ви дійсно хочете скинути поточну сесію та почати нову заявку?")) {
+					if (confirm("Почати нову заявку?")) {
 						localStorage.removeItem('agrogrant_user_id');
 						userId = uuidv4();
 						localStorage.setItem('agrogrant_user_id', userId);
 						if (chatbox) chatbox.innerHTML = '';
 						updateProfileUI(null);
-						updateGrantsUI(null); // Очищаємо список грантів
+						updateGrantsUI(null, null);
 						addMessage('Система', 'Сесію скинуто. Введіть новий код ЄДРПОУ або розкажіть про підприємство.');
 					}
 				});
 			}
 
-			// Ініціалізація розпізнавання голосу (Web Speech API)
 			const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 			if (!SpeechRecognition) {
-				// Якщо браузер не підтримує голос (наприклад, Firefox без налаштувань)
-				if (micBtn) {
-					micBtn.disabled = true;
-					micBtn.textContent = 'Мікрофон недоступний';
-				}
-				if (sendBtn) {
-					sendBtn.addEventListener('click', () => { if (textInput) sendMessage(textInput.value); });
-				}
-				if (textInput) {
-					textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(textInput.value); });
-				}
+				if (micBtn) { micBtn.disabled = true; micBtn.textContent = 'Мікрофон недоступний'; }
+				if (sendBtn) sendBtn.addEventListener('click', () => { if (textInput) sendMessage(textInput.value); });
+				if (textInput) textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(textInput.value); });
 			} else {
 				const recognition = new SpeechRecognition();
 				recognition.lang = 'uk-UA';
-				recognition.continuous = true; // Безперервне слухання
-				recognition.interimResults = true; // Проміжні результати тексту
+				recognition.continuous = true;
+				recognition.interimResults = true;
 
-				// Зупинка запису та ініціалізація відправки
 				function stopRecordingAndSend() {
 					clearTimeout(silenceTimer);
 					if (isRecording) {
@@ -462,19 +452,14 @@
 						micBtn.textContent = 'Голос';
 						micBtn.classList.remove('recording');
 					}
-
 					const textToSend = textInput ? textInput.value : '';
-					if (textToSend.trim() && !isSending) {
-						sendMessage(textToSend);
-					}
+					if (textToSend.trim() && !isSending) sendMessage(textToSend);
 				}
 
-				// Керування записом голосу по кліку на мікрофон
 				if (micBtn) {
 					micBtn.addEventListener('click', () => {
-						if (isRecording) {
-							stopRecordingAndSend();
-						} else {
+						if (isRecording) stopRecordingAndSend();
+						else {
 							if (window.speechSynthesis) window.speechSynthesis.cancel();
 							finalTranscript = (textInput && textInput.value) ? textInput.value + ' ' : '';
 							isRecording = true;
@@ -485,18 +470,13 @@
 					});
 				}
 
-				// Обробка відправки через кнопку "Надіслати"
 				if (sendBtn) {
 					sendBtn.addEventListener('click', () => {
-						if (isRecording) {
-							stopRecordingAndSend();
-						} else {
-							if (textInput) sendMessage(textInput.value);
-						}
+						if (isRecording) stopRecordingAndSend();
+						else if (textInput) sendMessage(textInput.value);
 					});
 				}
 
-				// Обробка відправки клавішею Enter
 				if (textInput) {
 					textInput.addEventListener('keydown', (e) => {
 						if (e.key === 'Enter') {
@@ -506,44 +486,23 @@
 					});
 				}
 
-				// Подія отримання проміжних або фінальних результатів мовлення
 				recognition.onresult = (event) => {
-					clearTimeout(silenceTimer); // Скидаємо таймер тиші при кожному новому слові
+					clearTimeout(silenceTimer);
 					let interimTranscript = '';
 					for (let i = event.resultIndex; i < event.results.length; ++i) {
-						if (event.results[i].isFinal) {
-							finalTranscript += event.results[i][0].transcript + ' ';
-						} else {
-							interimTranscript += event.results[i][0].transcript;
-						}
+						if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
+						else interimTranscript += event.results[i][0].transcript;
 					}
-					if (textInput) {
-						textInput.value = (finalTranscript + interimTranscript).trim();
-					}
-
-					// Якщо користувач мовчить 3.5 сек, автоматично відправляємо текст
-					silenceTimer = setTimeout(() => {
-						stopRecordingAndSend();
-					}, SILENCE_DELAY);
+					if (textInput) textInput.value = (finalTranscript + interimTranscript).trim();
+					silenceTimer = setTimeout(stopRecordingAndSend, SILENCE_DELAY);
 				};
 
-				// Перезапуск мікрофона, якщо він вимкнувся сам, але запис ще активний
-				recognition.onend = () => {
-					if (isRecording) {
-						try { recognition.start(); } catch (e) { }
-					}
-				};
-
-				// Обробка помилок мікрофона
+				recognition.onend = () => { if (isRecording) { try { recognition.start(); } catch (e) { } } };
 				recognition.onerror = (event) => {
-					if (event.error === 'no-speech') return; // Ігноруємо відсутність звуку
+					if (event.error === 'no-speech') return;
 					clearTimeout(silenceTimer);
 					isRecording = false;
-					if (micBtn) {
-						micBtn.textContent = 'Голос';
-						micBtn.classList.remove('recording');
-					}
-					addMessage('Система', 'Помилка мікрофона: ' + event.error, true);
+					if (micBtn) { micBtn.textContent = 'Голос'; micBtn.classList.remove('recording'); }
 				};
 			}
 		});
@@ -551,6 +510,3 @@
 </body>
 
 </html>
-git add index.html
-git commit -m "client visualization"
-git push
