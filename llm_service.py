@@ -5,7 +5,6 @@ import httpx
 
 class LLMService:
     def __init__(self):
-        # gemini-2.0-flash ставимо першим як найсучаснішу модель
         self.models = [
             "gemini-2.0-flash",
             "gemini-2.5-flash",
@@ -25,9 +24,8 @@ class LLMService:
             "Ти голосовий асистент АгроГрант. Твоя мета — зібрати дані про агропідприємство для грантової заявки. "
             "Спілкуйся виключно українською мовою, коротко, природно і без латинських абревіатур. "
             f"Поточний профіль підприємства: {json.dumps(current_profile, ensure_ascii=False)}. "
-            "Витягни нові дані з повідомлення користувача (наприклад, площу в гектарах віднеси до size_category, "
-            "культуру вирощування — до activity_type або investment_focus) та м'яко запитай про 1-2 наступні незаповнені поля. "
-            "Коли всі поля заповнені, порекомендуй відповідну грантову програму та повідоми, що заявку можна завантажити кнопкою нижче. "
+            "Витягни нові дані з повідомлення користувача та м'яко запитай про 1-2 наступні незаповнені поля. "
+            "Коли всі поля заповнені, порекомендуй програму та повідоми, що заявку можна завантажити кнопкою нижче. "
             "ОБОВ'ЯЗКОВО повертай відповідь строго у форматі JSON з двома полями: "
             "'reply' (текст відповіді українською) та 'extracted_data' (словник із ключами: "
             "region, activity_type, size_category, employees_count, investment_focus, own_contribution_percent; "
@@ -42,13 +40,16 @@ class LLMService:
         }
 
         last_error = "невідома помилка"
-        base_host = "https://" + "[generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/)"
+        
+        # Захист від падінь DNS на Render: автоматично робимо 3 спроби перепідключення
+        transport = httpx.AsyncHTTPTransport(retries=3)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(transport=transport) as client:
             for model_name in self.models:
-                url = f"{base_host}{model_name}:generateContent?key={self.api_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
                 try:
-                    response = await client.post(url, headers=headers, json=payload, timeout=25.0)
+                    # Збільшено таймаут до 30 секунд для важких мережевих умов
+                    response = await client.post(url, headers=headers, json=payload, timeout=30.0)
                     print(f"Model {model_name} -> Status Code: {response.status_code}")
 
                     if response.status_code == 200:
@@ -63,7 +64,7 @@ class LLMService:
                         if not text_response and parts:
                             text_response = parts[-1].get("text", "").strip()
 
-                        # Надійний пошук JSON через регулярний вираз
+                        # Надійний пошук JSON
                         match = re.search(r"\{.*\}", text_response, re.DOTALL)
                         json_str = match.group(0) if match else text_response
 
@@ -78,22 +79,21 @@ class LLMService:
                             }
                         except Exception as parse_err:
                             print(f"JSON parse fallback on {model_name}: {parse_err}")
-                            # Якщо JSON зламаний, просто повертаємо текст, щоб не випадала помилка
                             return {
                                 "reply": text_response or "Дані отримано, але формат відповіді порушено.",
                                 "extracted_data": {},
                                 "is_error": False
                             }
                     else:
-                        last_error = f"код {response.status_code} ({model_name})"
+                        last_error = f"код {response.status_code}"
                         print(f"API Error on {model_name}: {response.text}")
                 except Exception as e:
                     last_error = f"{type(e).__name__}: {str(e)}"
-                    print(f"LLM Exception on {model_name}: {last_error}")
-                    continue
+                    print(f"Мережевий збій на {model_name}: {last_error}")
+                    continue # Пробуємо наступну модель у списку
 
         return {
-            "reply": f"Тимчасовий збій зв'язку із сервісом обробки мови ({last_error}).",
+            "reply": f"Тимчасовий збій мережі на сервері. Будь ласка, спробуйте ще раз. ({last_error})",
             "extracted_data": {},
             "is_error": True
         }
