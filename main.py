@@ -3,7 +3,7 @@ import re
 import uuid
 import httpx
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -19,6 +19,8 @@ if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 elif DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "agro2026")
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -81,6 +83,7 @@ with engine.connect() as conn:
         except Exception as e:
             print(f"Migration check for {col}: {e}")
 
+# Розширений реєстр реальних та тестових підприємств для демонстрації
 SEED_COMPANIES = [
     {
         "edrpou": "03728915",
@@ -117,6 +120,33 @@ SEED_COMPANIES = [
         "activity_type": "Тепличне господарство (вирощування томатів та зелені)",
         "size_category": "Мале підприємство (2.0 га)",
         "employees_count": "11 працівників"
+    },
+    {
+        "edrpou": "33963954",
+        "company_name": "ТзОВ «ВМВ Холдінг»",
+        "kved": "16.10 Лісопильне та стругальне виробництво / Агропереробка",
+        "region": "Львівська область, м. Червоноград",
+        "activity_type": "Виробництво та переробка сировини",
+        "size_category": "Середнє підприємство",
+        "employees_count": "45 працівників"
+    },
+    {
+        "edrpou": "31228240",
+        "company_name": "ТОВ «АГРО-ІНВЕСТ»",
+        "kved": "01.11 Вирощування зернових культур, бобових і насіння олійних культур",
+        "region": "Львівська область, Червоноградський р-н",
+        "activity_type": "Рослинництво (зернові та олійні культури)",
+        "size_category": "Середнє підприємство (540 га)",
+        "employees_count": "22 працівники"
+    },
+    {
+        "edrpou": "38117028",
+        "company_name": "ФГ «АГРО-ПОЛІССЯ ПЛЮС»",
+        "kved": "01.41 Розведення великої рогатої худоби молочних порід",
+        "region": "Житомирська область",
+        "activity_type": "Тваринництво та кормовиробництво",
+        "size_category": "Мале підприємство (190 га)",
+        "employees_count": "16 працівників"
     }
 ]
 
@@ -124,9 +154,18 @@ def seed_initial_data():
     db = SessionLocal()
     try:
         for comp in SEED_COMPANIES:
-            exists = db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == comp["edrpou"]).first()
-            if not exists:
+            existing = db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == comp["edrpou"]).first()
+            if existing:
+                # Оновлюємо старі фейкові записи "АГРО-ЛАН", якщо вони були створені раніше
+                existing.company_name = comp["company_name"]
+                existing.kved = comp["kved"]
+                existing.region = comp["region"]
+                existing.activity_type = comp["activity_type"]
+                existing.size_category = comp["size_category"]
+                existing.employees_count = comp["employees_count"]
+            else:
                 db.add(EDRPOURegistry(**comp))
+
         for g in DEFAULT_GRANTS:
             exists_g = db.query(GrantProgram).filter(GrantProgram.code == g["code"]).first()
             if not exists_g:
@@ -151,41 +190,75 @@ def seed_initial_data():
 seed_initial_data()
 
 def lookup_or_create_edrpou(db, code: str) -> EDRPOURegistry:
-    # 1. Шукаємо в нашій локальній БД
     record = db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == code).first()
-    if record:
+    if record and not record.company_name.startswith("ФГ «АГРО-ЛАН"):
         return record
-    
-    # 2. Якщо немає - робимо запит до Opendatabot API
-    company_name = f"Підприємство №{code}"
+
+    # Якщо коду немає в локальному реєстрі — звертаємось до відкритого API Opendatabot
+    company_name = f"Суб'єкт господарювання (ЄДРПОУ {code})"
     status = "Зареєстровано"
-    
+    kved_val = "Потребує уточнення в діалозі"
+    region_val = "Потребує уточнення"
+
     try:
-        # Безкоштовний відкритий ендпоінт для базової інформації
         url = f"https://opendatabot.com/api/v2/company/{code}"
         response = httpx.get(url, timeout=5.0)
         if response.status_code == 200:
             data = response.json()
-            company_name = data.get("name", company_name)
-            status = data.get("status", status)
+            company_name = data.get("name") or data.get("short_name") or company_name
+            status = data.get("status") or status
+            if data.get("kved"):
+                kved_val = str(data.get("kved"))
+            if data.get("address"):
+                region_val = str(data.get("address")).split(",")[0].strip()
     except Exception as e:
-        print(f"Opendatabot API error: {e}")
+        print(f"Opendatabot API lookup notice: {e}")
 
-    # 3. Створюємо новий запис з реальними даними
+    if record:
+        record.company_name = company_name
+        record.kved = kved_val
+        record.region = region_val
+        record.activity_type = "Потребує уточнення"
+        record.size_category = "Потребує уточнення"
+        record.employees_count = "Потребує уточнення"
+        record.status = status
+        db.commit()
+        db.refresh(record)
+        return record
+
     new_company = EDRPOURegistry(
         edrpou=code,
         company_name=company_name,
-        kved="Не вказано (потребує уточнення)",
-        region="Не вказано",
-        activity_type="Не вказано",
-        size_category="Не вказано",
-        employees_count="Не вказано",
+        kved=kved_val,
+        region=region_val,
+        activity_type="Потребує уточнення",
+        size_category="Потребує уточнення",
+        employees_count="Потребує уточнення",
         status=status
     )
     db.add(new_company)
     db.commit()
     db.refresh(new_company)
     return new_company
+
+def get_grants_from_db(db):
+    db_grants = db.query(GrantProgram).all()
+    if not db_grants:
+        return DEFAULT_GRANTS
+    grants_list = []
+    for g in db_grants:
+        grants_list.append({
+            "code": g.code,
+            "title": g.title,
+            "donor": g.donor,
+            "max_amount": g.max_amount,
+            "min_own_percent": g.min_own_percent,
+            "target_kveds": g.target_kveds,
+            "land_req": g.land_req,
+            "keywords": g.keywords.split(",") if g.keywords else [],
+            "requirements": g.requirements
+        })
+    return grants_list
 
 app = FastAPI()
 
@@ -204,7 +277,32 @@ class ChatRequest(BaseModel):
 
 @app.api_route("/", methods=["GET", "HEAD"])
 def health_check():
-    return {"status": "ok", "service": "AgroGrant API"}
+    return {"status": "ok", "service": "AgroGrant Analytics API"}
+
+@app.get("/profile/{user_id}")
+def get_user_profile(user_id: uuid.UUID):
+    db = SessionLocal()
+    try:
+        db_profile = db.query(EnterpriseProfile).filter(EnterpriseProfile.user_id == user_id).first()
+        if not db_profile:
+            return {"profile": None, "grants": []}
+        current_profile = {
+            "edrpou": db_profile.edrpou,
+            "company_name": db_profile.company_name,
+            "kved": db_profile.kved,
+            "region": db_profile.region,
+            "activity_type": db_profile.activity_type,
+            "size_category": db_profile.size_category,
+            "employees_count": db_profile.employees_count,
+            "investment_focus": db_profile.investment_focus,
+            "own_contribution_percent": db_profile.own_contribution_percent
+        }
+        has_any = any(v for v in current_profile.values())
+        grants_list = get_grants_from_db(db)
+        scored = evaluate_grants(current_profile, grants_list) if has_any else []
+        return {"profile": current_profile if has_any else None, "grants": scored}
+    finally:
+        db.close()
 
 @app.get("/edrpou/{code}")
 def get_edrpou_info(code: str):
@@ -226,22 +324,6 @@ def get_edrpou_info(code: str):
         }
     finally:
         db.close()
-def get_grants_from_db(db):
-    db_grants = db.query(GrantProgram).all()
-    grants_list = []
-    for g in db_grants:
-        grants_list.append({
-            "code": g.code,
-            "title": g.title,
-            "donor": g.donor,
-            "max_amount": g.max_amount,
-            "min_own_percent": g.min_own_percent,
-            "target_kveds": g.target_kveds,
-            "land_req": g.land_req,
-            "keywords": g.keywords.split(",") if g.keywords else [],
-            "requirements": g.requirements
-        })
-    return grants_list
 
 @app.get("/grants/sync")
 async def sync_grants():
@@ -294,15 +376,21 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
             reg_company = lookup_or_create_edrpou(db, found_code)
             db_profile.edrpou = reg_company.edrpou
             db_profile.company_name = reg_company.company_name
-            db_profile.kved = reg_company.kved
-            db_profile.region = reg_company.region
-            db_profile.activity_type = reg_company.activity_type
-            db_profile.size_category = reg_company.size_category
-            db_profile.employees_count = reg_company.employees_count
+            if reg_company.kved and "уточнення" not in reg_company.kved:
+                db_profile.kved = reg_company.kved
+            if reg_company.region and "уточнення" not in reg_company.region:
+                db_profile.region = reg_company.region
+            if reg_company.activity_type and "уточнення" not in reg_company.activity_type:
+                db_profile.activity_type = reg_company.activity_type
+            if reg_company.size_category and "уточнення" not in reg_company.size_category:
+                db_profile.size_category = reg_company.size_category
+            if reg_company.employees_count and "уточнення" not in reg_company.employees_count:
+                db_profile.employees_count = reg_company.employees_count
             db.commit()
             edrpou_note = (
-                f" [СИСТЕМНЕ ПОВІДОМЛЕННЯ: Підтягнуто ЄДРПОУ {found_code}: {reg_company.company_name}, "
-                f"КВЕД {reg_company.kved}. Запитай лише про напрям інвестицій та % власного внеску.]"
+                f" [СИСТЕМНЕ ПОВІДОМЛЕННЯ: За кодом ЄДРПОУ {found_code} знайдено: {reg_company.company_name}, "
+                f"КВЕД: {reg_company.kved}, Регіон: {reg_company.region}. "
+                f"Повідом це користувачу і запитай лише про незаповнені поля (наприклад, напрям інвестицій та % власного внеску).]"
             )
 
         current_profile = {
@@ -317,14 +405,12 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
             "own_contribution_percent": db_profile.own_contribution_percent
         }
 
-        # Отримуємо гранти з бази для скорингу
         grants_list = get_grants_from_db(db)
         scored_for_llm = evaluate_grants(current_profile, grants_list)
-        
         top_grants_hint = ""
         if scored_for_llm:
             top_grants_hint = (
-                f" [Рекомендації: 1) {scored_for_llm[0]['title']} (сумісність {scored_for_llm[0]['score']}%); "
+                f" [Топ грантів за скорингом: 1) {scored_for_llm[0]['title']} ({scored_for_llm[0]['score']}%); "
                 f"2) {scored_for_llm[1]['title'] if len(scored_for_llm) > 1 else ''}]"
             )
 
@@ -343,7 +429,6 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
         if updated:
             db.commit()
 
-        # Фінальний скоринг з новими даними
         final_scored = evaluate_grants(current_profile, grants_list)
 
         return {
@@ -356,6 +441,42 @@ async def chat_with_bot(user_id: uuid.UUID, request: ChatRequest):
         db.rollback()
         print(f"Error in chat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/stats")
+def get_admin_stats(password: str = Query("")):
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Невірний пароль адміністратора")
+    db = SessionLocal()
+    try:
+        profiles = db.query(EnterpriseProfile).all()
+        grants_count = db.query(GrantProgram).count()
+        regions, activities = {}, {}
+        edrpou_verified = 0
+        own_values = []
+
+        for p in profiles:
+            if p.edrpou:
+                edrpou_verified += 1
+            reg = p.region.split("(")[0].strip() if p.region else "Не вказано"
+            act = p.activity_type.split("[")[0].strip() if p.activity_type else "Не вказано"
+            regions[reg] = regions.get(reg, 0) + 1
+            activities[act] = activities.get(act, 0) + 1
+            if p.own_contribution_percent:
+                nums = re.findall(r"\d+", str(p.own_contribution_percent))
+                if nums:
+                    own_values.append(float(nums[0]))
+
+        avg_own = round(sum(own_values) / len(own_values), 1) if own_values else 25.0
+        return {
+            "total": len(profiles),
+            "edrpou_verified": edrpou_verified,
+            "grants_count": grants_count or len(DEFAULT_GRANTS),
+            "avg_own_percent": avg_own,
+            "regions": regions,
+            "activities": activities
+        }
     finally:
         db.close()
 
@@ -382,24 +503,5 @@ def export_grant(user_id: uuid.UUID):
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             headers={"Content-Disposition": "attachment; filename=AgroGrant_Analytical_Report.docx"}
         )
-    finally:
-        db.close()
-
-@app.get("/api/stats")
-def get_admin_stats():
-    db = SessionLocal()
-    try:
-        profiles = db.query(EnterpriseProfile).all()
-        regions, activities = {}, {}
-        for p in profiles:
-            reg = p.region.split("(")[0].strip() if p.region else "Не вказано"
-            act = p.activity_type.split("[")[0].strip() if p.activity_type else "Не вказано"
-            regions[reg] = regions.get(reg, 0) + 1
-            activities[act] = activities.get(act, 0) + 1
-        return {
-            "total": len(profiles),
-            "regions": regions,
-            "activities": activities
-        }
     finally:
         db.close()

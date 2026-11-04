@@ -4,81 +4,277 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>AgroGrant - Дашборд</title>
+	<title>AgroGrant — Панель макроаналітики (Адмін)</title>
 	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<style>
+		:root {
+			--bg-main: #f1f5f9;
+			--card-bg: #ffffff;
+			--text-primary: #0f172a;
+			--text-secondary: #475569;
+			--border-color: #e2e8f0;
+			--accent-green: #059669;
+			--accent-dark: #0f172a;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
 		body {
-			font-family: 'Segoe UI', Tahoma, sans-serif;
-			background: #f4f7f6;
-			padding: 20px;
-			text-align: center;
+			font-family: 'Segoe UI', system-ui, sans-serif;
+			background: var(--bg-main);
+			color: var(--text-primary);
+			margin: 0;
+		}
+
+		.topbar {
+			background: var(--accent-dark);
+			color: white;
+			padding: 14px 28px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			border-bottom: 3px solid var(--accent-green);
+		}
+
+		.topbar a {
+			color: #e2e8f0;
+			text-decoration: none;
+			font-size: 13px;
+			border: 1px solid #334155;
+			padding: 6px 12px;
+			border-radius: 6px;
 		}
 
 		.container {
-			max-width: 900px;
-			margin: 0 auto;
+			max-width: 1140px;
+			margin: 26px auto;
+			padding: 0 20px;
 		}
 
-		.charts {
-			display: flex;
+		/* Вікно авторизації адміністратора */
+		#loginCard {
+			max-width: 400px;
+			margin: 60px auto;
+			background: white;
+			padding: 28px;
+			border-radius: 12px;
+			border: 1px solid var(--border-color);
+			box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+			text-align: center;
+		}
+
+		#loginCard input {
+			width: 100%;
+			padding: 11px 14px;
+			margin: 14px 0;
+			border: 1px solid #cbd5e1;
+			border-radius: 8px;
+			font-size: 14px;
+		}
+
+		.btn {
+			background: var(--accent-green);
+			color: white;
+			border: none;
+			padding: 10px 18px;
+			border-radius: 8px;
+			font-weight: 600;
+			cursor: pointer;
+			font-size: 14px;
+		}
+
+		.btn-dark {
+			background: var(--accent-dark);
+		}
+
+		/* Дашборд KPI та графіків */
+		#dashboardContent {
+			display: none;
+		}
+
+		.kpi-grid {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+			gap: 16px;
+			margin-bottom: 22px;
+		}
+
+		@media (max-width: 800px) {
+			.kpi-grid {
+				grid-template-columns: 1fr 1fr;
+			}
+		}
+
+		.kpi-card {
+			background: white;
+			padding: 18px;
+			border-radius: 10px;
+			border: 1px solid var(--border-color);
+		}
+
+		.kpi-label {
+			font-size: 12px;
+			color: var(--text-secondary);
+			text-transform: uppercase;
+		}
+
+		.kpi-val {
+			font-size: 26px;
+			font-weight: 700;
+			color: var(--accent-dark);
+			margin-top: 6px;
+		}
+
+		.charts-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
 			gap: 20px;
-			flex-wrap: wrap;
-			justify-content: center;
-			margin-top: 20px;
+		}
+
+		@media (max-width: 800px) {
+			.charts-grid {
+				grid-template-columns: 1fr;
+			}
 		}
 
 		.chart-box {
 			background: white;
 			padding: 20px;
-			border-radius: 10px;
-			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-			width: 400px;
-		}
-
-		h1 {
-			color: #198754;
+			border-radius: 12px;
+			border: 1px solid var(--border-color);
 		}
 	</style>
 </head>
 
 <body>
+	<header class="topbar">
+		<div>
+			<strong style="font-size: 18px;">AgroGrant • Макроаналітика АПК</strong>
+		</div>
+		<a href="index.html">Повернутися до асистента</a>
+	</header>
+
 	<div class="container">
-		<h1>📊 Макроаналітика AgroGrant</h1>
-		<p>Загалом опрацьовано анкет: <strong id="totalCount">0</strong></p>
-		<div class="charts">
-			<div class="chart-box"><canvas id="regionChart"></canvas></div>
-			<div class="chart-box"><canvas id="activityChart"></canvas></div>
+		<!-- Блок входу за паролем -->
+		<div id="loginCard">
+			<h2 style="margin-top: 0; font-size: 18px;">Авторизація адміністратора</h2>
+			<p style="font-size: 13px; color: #64748b;">Введіть пароль доступу до зведеної статистики підприємств (за
+				замовчуванням: <code>agro2026</code>)</p>
+			<input type="password" id="adminPass" placeholder="Пароль адміністратора..." value="agro2026" />
+			<button class="btn" id="loginBtn" style="width: 100%;">Увійти в панель</button>
+			<div id="authError" style="color: #dc2626; font-size: 13px; margin-top: 10px; display: none;">Невірний
+				пароль доступу</div>
+		</div>
+
+		<!-- Захищений контент дашборду -->
+		<div id="dashboardContent">
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+				<h2 style="margin: 0; font-size: 20px;">Зведена статистика звернень агропідприємств</h2>
+				<button class="btn btn-dark" id="syncGrantsBtn">Оновити базу грантів (ШІ-парсер)</button>
+			</div>
+
+			<div class="kpi-grid">
+				<div class="kpi-card">
+					<div class="kpi-label">Усього профілів у базі</div>
+					<div class="kpi-val" id="kpiTotal">0</div>
+				</div>
+				<div class="kpi-card">
+					<div class="kpi-label">Верифіковано за ЄДРПОУ</div>
+					<div class="kpi-val" id="kpiVerified" style="color: #059669;">0</div>
+				</div>
+				<div class="kpi-card">
+					<div class="kpi-label">Активних грантових програм</div>
+					<div class="kpi-val" id="kpiGrants">0</div>
+				</div>
+				<div class="kpi-card">
+					<div class="kpi-label">Середній власний внесок</div>
+					<div class="kpi-val" id="kpiOwn">0%</div>
+				</div>
+			</div>
+
+			<div class="charts-grid">
+				<div class="chart-box"><canvas id="regionChart"></canvas></div>
+				<div class="chart-box"><canvas id="activityChart"></canvas></div>
+			</div>
 		</div>
 	</div>
+
 	<script>
 		const BACKEND_URL = "https://" + "agrogrant.onrender.com";
+		let regChartInstance = null;
+		let actChartInstance = null;
 
-		async function loadStats() {
+		async function loadStats(password) {
+			const errBox = document.getElementById('authError');
+			errBox.style.display = 'none';
 			try {
-				const res = await fetch(`${BACKEND_URL}/api/stats`);
+				const res = await fetch(`${BACKEND_URL}/api/stats?password=${encodeURIComponent(password)}`);
+				if (res.status === 401) {
+					errBox.style.display = 'block';
+					return;
+				}
 				const data = await res.json();
-				document.getElementById('totalCount').textContent = data.total;
+				document.getElementById('loginCard').style.display = 'none';
+				document.getElementById('dashboardContent').style.display = 'block';
 
-				new Chart(document.getElementById('regionChart'), {
-					type: 'pie',
+				document.getElementById('kpiTotal').textContent = data.total;
+				document.getElementById('kpiVerified').textContent = data.edrpou_verified;
+				document.getElementById('kpiGrants').textContent = data.grants_count;
+				document.getElementById('kpiOwn').textContent = data.avg_own_percent + '%';
+
+				if (regChartInstance) regChartInstance.destroy();
+				regChartInstance = new Chart(document.getElementById('regionChart'), {
+					type: 'doughnut',
 					data: {
 						labels: Object.keys(data.regions),
-						datasets: [{ data: Object.values(data.regions), backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1'] }]
+						datasets: [{
+							data: Object.values(data.regions),
+							backgroundColor: ['#0f172a', '#059669', '#2563eb', '#d97706', '#64748b']
+						}]
 					},
-					options: { plugins: { title: { display: true, text: 'Розподіл за регіонами' } } }
+					options: { plugins: { title: { display: true, text: 'Регіональний розподіл підприємств' } } }
 				});
 
-				new Chart(document.getElementById('activityChart'), {
+				if (actChartInstance) actChartInstance.destroy();
+				actChartInstance = new Chart(document.getElementById('activityChart'), {
 					type: 'bar',
 					data: {
 						labels: Object.keys(data.activities),
-						datasets: [{ label: 'Кількість', data: Object.values(data.activities), backgroundColor: '#198754' }]
+						datasets: [{
+							label: 'Кількість підприємств',
+							data: Object.values(data.activities),
+							backgroundColor: '#059669'
+						}]
 					},
-					options: { plugins: { title: { display: true, text: 'Популярні напрямки (КВЕД)' } } }
+					options: { plugins: { title: { display: true, text: 'Спеціалізація та напрями АПК' } } }
 				});
-			} catch (e) { console.error("Помилка завантаження статистики", e); }
+			} catch (e) {
+				console.error("Помилка завантаження статистики", e);
+			}
 		}
-		loadStats();
+
+		document.getElementById('loginBtn').addEventListener('click', () => {
+			const pass = document.getElementById('adminPass').value;
+			loadStats(pass);
+		});
+
+		document.getElementById('syncGrantsBtn').addEventListener('click', async (e) => {
+			const btn = e.target;
+			btn.disabled = true;
+			btn.textContent = 'Синхронізація з ДАР та Дія...';
+			try {
+				const res = await fetch(`${BACKEND_URL}/grants/sync`);
+				const d = await res.json();
+				alert(`Синхронізовано програм: ${d.total_parsed} (додано нових: ${d.new_added})`);
+			} catch (err) {
+				alert('Помилка синхронізації');
+			} finally {
+				btn.disabled = false;
+				btn.textContent = 'Оновити базу грантів (ШІ-парсер)';
+			}
+		});
 	</script>
 </body>
 
