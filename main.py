@@ -1,6 +1,8 @@
 """
-Серверне ядро інтелектуального грантового чат-бота (AgroGrant_Bot).
-Містить ротацію логів RotatingFileHandler, сумісність драйверів БД та захист від спам-полінгу.
+НАУКОВО-МЕТОДИЧНИЙ ОПИС МОДУЛЯ (main.py):
+Серверне ядро інформаційно-аналітичної платформи «AgroCluster Analytics».
+Забезпечує ORM SQLAlchemy, двоконтурну телеметрію з авторотацією (RotatingFileHandler 1 МБ)
+та потокову генерацію DOCX-проєктів.
 """
 
 import os
@@ -21,14 +23,22 @@ from llm_service import LLMService
 from doc_generator import create_grant_document
 from grant_scraper import DEFAULT_GRANTS, evaluate_grants
 
-# Авторотація файлу логів app.log (ліміт 1 МБ, максимум 2 архівні копії)
-log_handler = RotatingFileHandler("app.log", maxBytes=1 * 1024 * 1024, backupCount=2, encoding="utf-8")
-log_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
-logger = logging.getLogger("AgroGrantCore")
-logger.setLevel(logging.INFO)
-logger.addHandler(log_handler)
+# Конфігурація логування з автоочищенням (RotatingFileHandler: ліміт 1 МБ, 2 резервні копії)
+log_handler = RotatingFileHandler(
+    "app.log",
+    maxBytes=1 * 1024 * 1024,
+    backupCount=2,
+    encoding="utf-8"
+)
+log_formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+log_handler.setFormatter(log_formatter)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./agrogrant.db")
+logger = logging.getLogger("AgroClusterCore")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    logger.addHandler(log_handler)
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./cluster.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
 elif DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
@@ -83,73 +93,152 @@ class EDRPOURegistry(Base):
     activity_type = Column(String, nullable=False)
     size_category = Column(String, nullable=False)
     employees_count = Column(String, nullable=False)
-    status = Column(String, default="Активний у ДАР")
+    status = Column(String, default="Верифіковано в Реєстрі ІІБ")
+
+
+class GrantProgram(Base):
+    __tablename__ = "grant_programs"
+    code = Column(String, primary_key=True)
+    title = Column(String, nullable=False)
+    donor = Column(String, nullable=False)
+    max_amount = Column(String, nullable=False)
+    min_own_percent = Column(Integer, default=0)
+    target_kveds = Column(String, nullable=True)
+    land_req = Column(String, nullable=True)
+    keywords = Column(String, nullable=True)
+    requirements = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow)
 
 
 Base.metadata.create_all(bind=engine)
 
 SEED_COMPANIES = [
     {
-        "edrpou": "03728915",
-        "company_name": "ФГ «ПОДІЛЬСЬКИЙ КОЛОС»",
-        "kved": "01.11 Вирощування зернових і технічних культур",
-        "region": "Вінницька область",
-        "activity_type": "Рослинництво та насінництво",
-        "size_category": "300 га",
-        "employees_count": "14 працівників"
+        "edrpou": "00496802",
+        "company_name": "ННЦ «ІНСТИТУТ ЗЕМЛЕРОБСТВА НААН»",
+        "kved": "72.19 Дослідження й експериментальні розробки у сфері природничих і технічних наук",
+        "region": "Київська обл., смт Чабани",
+        "activity_type": "І. Наукове ядро: Супереліта (1–5 га)",
+        "size_category": "Базовий селекційний розсадник",
+        "employees_count": "Роялті ОІВ + Аванс 30%"
     },
     {
-        "edrpou": "38492014",
-        "company_name": "ТОВ «САДИ ПОДІЛЛЯ»",
-        "kved": "01.24 Вирощування зерняткових і кісточкових фруктів",
-        "region": "Вінницька область",
-        "activity_type": "Садівництво та ягідництво",
-        "size_category": "18 га саду",
-        "employees_count": "12 працівників"
+        "edrpou": "40125890",
+        "company_name": "ТОВ «ІНСТИТУТ ІННОВАЦІЙНОЇ БІОЕКОНОМІКИ» (ІІБ)",
+        "kved": "70.22 Консультування з питань комерційної діяльності й керування",
+        "region": "м. Київ",
+        "activity_type": "ІІ. Координація (ІІБ): Драфт і Тизер",
+        "size_category": "Цифровий інноваційний хаб",
+        "employees_count": "Провайдинг трансферу ОІВ"
+    },
+    {
+        "edrpou": "03728915",
+        "company_name": "ФГ «ПОДІЛЬСЬКИЙ КОЛОС»",
+        "kved": "01.11 Вирощування зернових і технічних культур (насінництво)",
+        "region": "Вінницька обл.",
+        "activity_type": "ІІІ. Насінництво: Еліта та РС-1",
+        "size_category": "300 га у кластерному циклі",
+        "employees_count": "Виробництво товарного зерна"
     },
     {
         "edrpou": "41258963",
         "company_name": "ТОВ «АГРО-ЕКО ПЕРЕРОБКА»",
-        "kved": "10.41 Виробництво олії та тваринних жирів",
-        "region": "Черкаська область",
-        "activity_type": "Глибока агропереробка",
-        "size_category": "Лінія переробки 1500 т/рік",
-        "employees_count": "26 працівників"
-    },
-    {
-        "edrpou": "00496802",
-        "company_name": "ННЦ «ІНСТИТУТ ЗЕМЛЕРОБСТВА НААН»",
-        "kved": "72.19 Дослідження й експериментальні розробки",
-        "region": "Київська область",
-        "activity_type": "Наукове ядро та селекція",
-        "size_category": "Дослідні поля",
-        "employees_count": "Науковий штат"
+        "kved": "10.41 Виробництво олії та тваринних жирів / Глибока переробка",
+        "region": "Черкаська обл.",
+        "activity_type": "ІV. Глибока переробка: Олія, порошок, шрот",
+        "size_category": "Олійноекстракційна лінія (Zero-Waste)",
+        "employees_count": "Генерація доданої вартості +135%"
     }
 ]
 
 
-def seed_db():
+def seed_initial_data() -> None:
     db = SessionLocal()
     try:
         for comp in SEED_COMPANIES:
-            if not db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == comp["edrpou"]).first():
+            existing = db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == comp["edrpou"]).first()
+            if existing:
+                for k, v in comp.items():
+                    setattr(existing, k, v)
+            else:
                 db.add(EDRPOURegistry(**comp))
+
+        for g in DEFAULT_GRANTS:
+            exists_g = db.query(GrantProgram).filter(GrantProgram.code == g["code"]).first()
+            if not exists_g:
+                db.add(GrantProgram(
+                    code=g["code"],
+                    title=g["title"],
+                    donor=g["donor"],
+                    max_amount=g["max_amount"],
+                    min_own_percent=g["min_own_percent"],
+                    target_kveds=g["target_kveds"],
+                    land_req=g["land_req"],
+                    keywords=",".join(g["keywords"]),
+                    requirements=g["requirements"]
+                ))
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.error("Помилка ініціалізації базових таблиць: %s", exc)
     finally:
         db.close()
 
 
-seed_db()
+seed_initial_data()
 
-app = FastAPI(title="AgroGrant Analytics API", version="2.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+def lookup_or_create_edrpou(db, code: str) -> EDRPOURegistry:
+    record = db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == code).first()
+    if record:
+        return record
+
+    new_company = EDRPOURegistry(
+        edrpou=code,
+        company_name=f"АГРОПАРТНЕР КЛАСТЕРУ (ЄДРПОУ {code})",
+        kved="01.11 / 10.41 Вирощування та переробка олійних культур",
+        region="Україна",
+        activity_type="ІІІ. Насінництво та агровиробництво",
+        size_category="300 га (кластерний цикл)",
+        employees_count="Учасник кооперативного пулу",
+        status="Верифіковано в Реєстрі ІІБ"
+    )
+    db.add(new_company)
+    db.commit()
+    db.refresh(new_company)
+    return new_company
+
+
+def get_grants_from_db(db) -> list:
+    db_grants = db.query(GrantProgram).all()
+    if not db_grants:
+        return DEFAULT_GRANTS
+    return [
+        {
+            "code": g.code,
+            "title": g.title,
+            "donor": g.donor,
+            "max_amount": g.max_amount,
+            "min_own_percent": g.min_own_percent,
+            "target_kveds": g.target_kveds,
+            "land_req": g.land_req,
+            "keywords": g.keywords.split(",") if g.keywords else [],
+            "requirements": g.requirements
+        }
+        for g in db_grants
+    ]
+
+
+app = FastAPI(title="AgroCluster Analytics API", version="2.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
 llm_service = LLMService()
-
-
-class ChatRequest(BaseModel):
-    message: str
 
 
 class LogRequest(BaseModel):
@@ -157,135 +246,70 @@ class LogRequest(BaseModel):
     details: str
 
 
+class ChatRequest(BaseModel):
+    message: str
+
+
 @app.get("/")
 def health_check():
-    return {"status": "ok", "service": "AgroGrant_Bot API v2.1"}
+    return {"status": "ok", "service": "AgroCluster Analytics Backend v2.0"}
 
 
 @app.post("/log")
-async def write_log(req: LogRequest, request: Request):
-    ip = request.client.host if request.client else "unknown"
-    logger.info("IP: %s | %s | %s", ip, req.action, req.details)
+async def record_telemetry_log(req: LogRequest, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info("IP: %s | ACTION: %s | DETAILS: %s", client_ip, req.action, req.details)
     db = SessionLocal()
     try:
-        db.add(SystemLog(action=req.action, details=req.details, ip_address=ip))
+        db.add(SystemLog(action=req.action, details=req.details, ip_address=client_ip))
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.error("Помилка запису логу в БД: %s", exc)
     finally:
         db.close()
     return {"status": "logged"}
 
 
-@app.get("/profile/{user_id}")
-def get_user_profile(user_id: uuid.UUID):
-    """Одноразове отримання профілю при завантаженні сторінки (без спам-полінгу)."""
+@app.get("/api/logs")
+def get_system_logs(password: str = Query("")):
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Невірний пароль адміністратора")
     db = SessionLocal()
     try:
-        prof = db.query(EnterpriseProfile).filter(EnterpriseProfile.user_id == user_id).first()
-        profile_dict = {
-            "edrpou": prof.edrpou if prof else None,
-            "company_name": prof.company_name if prof else None,
-            "kved": prof.kved if prof else None,
-            "region": prof.region if prof else None,
-            "activity_type": prof.activity_type if prof else None,
-            "size_category": prof.size_category if prof else None,
-            "employees_count": prof.employees_count if prof else None,
-            "investment_focus": prof.investment_focus if prof else None,
-            "own_contribution_percent": prof.own_contribution_percent if prof else None
+        rows = db.query(SystemLog).order_by(SystemLog.timestamp.desc()).limit(60).all()
+        return {
+            "logs": [
+                {
+                    "timestamp": r.timestamp.strftime("%d.%m.%Y %H:%M:%S"),
+                    "action": r.action,
+                    "details": f"{r.details} [IP: {r.ip_address}]"
+                }
+                for r in rows
+            ]
         }
-        return {"profile": profile_dict, "grants": evaluate_grants(profile_dict, DEFAULT_GRANTS)}
-    finally:
-        db.close()
-
-
-@app.post("/chat/{user_id}")
-async def chat_endpoint(user_id: uuid.UUID, request: ChatRequest, req_meta: Request):
-    ip = req_meta.client.host if req_meta.client else "unknown"
-    logger.info("IP: %s | CHAT_MSG | %s", ip, request.message[:120])
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            user = User(id=user_id, session_id=str(user_id))
-            db.add(user)
-            db.commit()
-
-        prof = db.query(EnterpriseProfile).filter(EnterpriseProfile.user_id == user_id).first()
-        if not prof:
-            prof = EnterpriseProfile(user_id=user_id)
-            db.add(prof)
-            db.commit()
-            db.refresh(prof)
-
-        edrpou_match = re.search(r"\b(\d{8})\b", request.message)
-        edrpou_note = ""
-        if edrpou_match:
-            code = edrpou_match.group(1)
-            reg = db.query(EDRPOURegistry).filter(EDRPOURegistry.edrpou == code).first()
-            if not reg:
-                reg = EDRPOURegistry(
-                    edrpou=code,
-                    company_name=f"АГРОПІДПРИЄМСТВО (ЄДРПОУ {code})",
-                    kved="01.11 Вирощування зернових і технічних культур",
-                    region="Україна",
-                    activity_type="Сільськогосподарське виробництво",
-                    size_category="Потребує уточнення",
-                    employees_count="Потребує уточнення"
-                )
-                db.add(reg)
-                db.commit()
-            prof.edrpou = reg.edrpou
-            prof.company_name = reg.company_name
-            prof.kved = reg.kved
-            prof.region = reg.region
-            prof.activity_type = reg.activity_type
-            prof.size_category = reg.size_category
-            prof.employees_count = reg.employees_count
-            db.commit()
-            edrpou_note = f" [Верифіковано ЄДРПОУ {code}: {reg.company_name}]"
-
-        current_profile = {
-            "edrpou": prof.edrpou,
-            "company_name": prof.company_name,
-            "kved": prof.kved,
-            "region": prof.region,
-            "activity_type": prof.activity_type,
-            "size_category": prof.size_category,
-            "employees_count": prof.employees_count,
-            "investment_focus": prof.investment_focus,
-            "own_contribution_percent": prof.own_contribution_percent
-        }
-
-        llm_res = await llm_service.generate_response(request.message + edrpou_note, current_profile)
-        for k, v in llm_res.get("extracted_data", {}).items():
-            if v and hasattr(prof, k):
-                setattr(prof, k, str(v))
-                current_profile[k] = str(v)
-        db.commit()
-
-        scored = evaluate_grants(current_profile, DEFAULT_GRANTS)
-        return {"reply": llm_res["reply"], "profile": current_profile, "grants": scored, "is_error": False}
     finally:
         db.close()
 
 
 @app.get("/api/stats")
-def admin_stats(password: str = Query("")):
+def get_admin_stats(password: str = Query("")):
     if password != ADMIN_PASSWORD:
-        raise HTTPException(status_code=401, detail="Невірний пароль")
+        raise HTTPException(status_code=401, detail="Невірний пароль адміністратора")
     db = SessionLocal()
     try:
-        reg_list = db.query(EDRPOURegistry).all()
+        registry = db.query(EDRPOURegistry).all()
         regions, activities = {}, {}
-        for r in reg_list:
-            regions[r.region] = regions.get(r.region, 0) + 1
-            activities[r.activity_type] = activities.get(r.activity_type, 0) + 1
+        for p in registry:
+            reg = p.region.split(",")[0].strip() if p.region else "Не вказано"
+            act = p.activity_type.split(":")[0].strip() if p.activity_type else "Не вказано"
+            regions[reg] = regions.get(reg, 0) + 1
+            activities[act] = activities.get(act, 0) + 1
         return {
-            "total": len(reg_list),
-            "edrpou_verified": len(reg_list),
-            "grants_count": len(DEFAULT_GRANTS),
-            "avg_own_percent": 25,
+            "total": len(registry),
+            "edrpou_verified": len(registry),
+            "grants_count": db.query(GrantProgram).count(),
+            "avg_own_percent": 30,
             "regions": regions,
             "activities": activities
         }
@@ -293,32 +317,120 @@ def admin_stats(password: str = Query("")):
         db.close()
 
 
-@app.api_route("/export/{user_id}", methods=["GET", "HEAD"])
-def export_docx(user_id: str):
+@app.get("/grants/sync")
+async def sync_grants():
+    seed_initial_data()
+    logger.info("Виконано синхронізацію каталогу моделей НААН-ІІБ")
+    return {"status": "synced"}
+
+
+@app.post("/chat/{user_id}")
+async def chat_with_coordinator(user_id: uuid.UUID, request: ChatRequest, req_meta: Request):
+    client_ip = req_meta.client.host if req_meta.client else "unknown"
     db = SessionLocal()
     try:
-        prof = None
-        try:
-            uid = uuid.UUID(user_id)
-            prof = db.query(EnterpriseProfile).filter(EnterpriseProfile.user_id == uid).first()
-        except Exception:
-            pass
-        profile_data = {
-            "edrpou": prof.edrpou if prof and prof.edrpou else "03728915",
-            "company_name": prof.company_name if prof and prof.company_name else "ФГ «ПОДІЛЬСЬКИЙ КОЛОС»",
-            "kved": prof.kved if prof and prof.kved else "01.11 Вирощування зернових і технічних культур",
-            "region": prof.region if prof and prof.region else "Вінницька область",
-            "activity_type": prof.activity_type if prof and prof.activity_type else "Рослинництво та переробка",
-            "size_category": prof.size_category if prof and prof.size_category else "300 га",
-            "employees_count": prof.employees_count if prof and prof.employees_count else "14 працівників",
-            "own_contribution_percent": prof.own_contribution_percent if prof and prof.own_contribution_percent else "30%",
-            "investment_focus": prof.investment_focus if prof and prof.investment_focus else "Масштабування та переробка"
+        db_user = db.query(User).filter(User.id == user_id).first()
+        if not db_user:
+            db_user = User(id=user_id, session_id=str(user_id))
+            db.add(db_user)
+            db.commit()
+
+        db_profile = db.query(EnterpriseProfile).filter(EnterpriseProfile.user_id == user_id).first()
+        if not db_profile:
+            db_profile = EnterpriseProfile(user_id=user_id)
+            db.add(db_profile)
+            db.commit()
+            db.refresh(db_profile)
+
+        edrpou_match = re.search(r"\b(\d{8})\b", request.message)
+        edrpou_note = ""
+        if edrpou_match:
+            found_code = edrpou_match.group(1)
+            reg_company = lookup_or_create_edrpou(db, found_code)
+            db_profile.edrpou = reg_company.edrpou
+            db_profile.company_name = reg_company.company_name
+            db_profile.kved = reg_company.kved
+            db_profile.region = reg_company.region
+            db_profile.activity_type = reg_company.activity_type
+            db_profile.size_category = reg_company.size_category
+            db.commit()
+            edrpou_note = f" [СИСТЕМНО: Верифіковано ЄДРПОУ {found_code} — {reg_company.company_name}]"
+            logger.info("IP: %s | EDRPOU_CHAT_VERIFY: %s", client_ip, found_code)
+
+        current_profile = {
+            "edrpou": db_profile.edrpou,
+            "company_name": db_profile.company_name,
+            "kved": db_profile.kved,
+            "region": db_profile.region,
+            "activity_type": db_profile.activity_type,
+            "size_category": db_profile.size_category,
+            "employees_count": db_profile.employees_count,
+            "investment_focus": db_profile.investment_focus,
+            "own_contribution_percent": db_profile.own_contribution_percent
         }
-        stream = create_grant_document(profile_data, DEFAULT_GRANTS)
+
+        llm_response = await llm_service.generate_response(request.message + edrpou_note, current_profile)
+        extracted = llm_response.get("extracted_data", {})
+
+        updated = False
+        for k, v in extracted.items():
+            if v and hasattr(db_profile, k):
+                setattr(db_profile, k, str(v))
+                current_profile[k] = str(v)
+                updated = True
+        if updated:
+            db.commit()
+
+        grants_list = get_grants_from_db(db)
+        scored = evaluate_grants(current_profile, grants_list)
+
+        return {
+            "reply": llm_response.get("reply", "Параметри учасника кластеру оновлено."),
+            "profile": current_profile,
+            "grants": scored,
+            "is_error": False
+        }
+    finally:
+        db.close()
+
+
+@app.api_route("/export/{user_id}", methods=["GET", "HEAD"])
+def export_cluster_docx(
+    user_id: str,
+    request: Request,
+    edrpou: str = Query("00496802"),
+    company: str = Query("ННЦ «ІНСТИТУТ ЗЕМЛЕРОБСТВА НААН»"),
+    area: str = Query("300"),
+    margin: str = Query("19.87 млн грн"),
+    roi: str = Query("118"),
+    prepay: str = Query("713 тис. грн")
+):
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info("IP: %s | DOCX_EXPORT | EDRPOU: %s | Area: %s ha", client_ip, edrpou, area)
+    db = SessionLocal()
+    try:
+        db.add(SystemLog(
+            action="DOCX_SERVER_EXPORT",
+            details=f"EDRPOU: {edrpou}, Area: {area}ha, Margin: {margin}, ROI: {roi}%",
+            ip_address=client_ip
+        ))
+        db.commit()
+
+        profile_data = {
+            "edrpou": edrpou,
+            "company_name": company,
+            "activity_type": "Учасник інноваційного аграрного кластеру «Біла Принцеса»",
+            "size_category": f"{area} га товарних посівів у кластерному циклі",
+            "own_contribution_percent": "30%",
+            "employees_count": f"Чиста маржа: {margin} (ROI {roi}%) | Аванс НААН: {prepay}",
+            "investment_focus": "Трансфер ОІВ НААН → Насінництво → Глибока переробка (Олія, порошок, шрот)"
+        }
+        grants_list = get_grants_from_db(db)
+        doc_stream = create_grant_document(profile_data, grants_list)
         return StreamingResponse(
-            stream,
+            doc_stream,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": "attachment; filename=AgroGrant_Analytical_Report.docx"}
+            headers={"Content-Disposition": "attachment; filename=AgroCluster_Scientific_Plan.docx"}
         )
     finally:
         db.close()

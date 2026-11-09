@@ -1,54 +1,56 @@
 """
-Модуль багатокритеріального скорингу державних та міжнародних грантів (AgroGrant_Bot).
-Розраховує відсоток відповідності (Score) підприємства умовам кожної програми.
+НАУКОВО-МЕТОДИЧНИЙ ОПИС МОДУЛЯ (grant_scraper.py):
+Модуль багатокритеріального скорингу інвестиційних та грантових моделей кластеризації.
+Реалізує алгоритм ранжування неборгових фінансових інструментів (державні гранти на переробку,
+венчурне партнерство Наука–Бізнес, форвардний Off-take пул) відповідно до профілю учасника.
 """
 
 import re
 
 DEFAULT_GRANTS = [
     {
-        "code": "ye_robota_processing",
-        "title": "Державний грант на переробне підприємство (Програма «єРобота»)",
-        "donor": "Мінекономіки України / Дія.Бізнес",
-        "max_amount": "до 8 000 000 грн",
+        "code": "cluster_deep_processing",
+        "title": "Біоекономічний кластер глибокої переробки (Олія, порошок, шрот)",
+        "donor": "Мінекономіки / Провайдинг ТОВ «Інститут інноваційної біоекономіки»",
+        "max_amount": "до 8 000 000 грн (безповоротно)",
         "min_own_percent": 20,
-        "target_kveds": "10.41, 10.61, 10.84, 10.91, 10.39",
-        "land_req": "Виробниче приміщення / лінія переробки",
-        "keywords": ["перероб", "олі", "шрот", "порошок", "ліні", "обладнан", "цех", "млин", "біла принцеса"],
-        "requirements": "Створення від 5 до 25 нових робочих місць, відсутність податкового боргу, співфінансування від 20%."
+        "target_kveds": "10.41, 10.61, 10.84, 10.91",
+        "land_req": "Виробничий цех / лінія холодного пресування олії",
+        "keywords": ["перероб", "олійн", "олія", "порошок", "шрот", "екстракц", "лінія", "цех"],
+        "requirements": "Інтеграція в ланцюг доданої вартості кластеру, безвідходна технологія Zero-Waste."
     },
     {
-        "code": "usaid_agro_resilience",
-        "title": "Співфінансування проєктів переробки, елеваторів та насінництва АПК",
-        "donor": "Програма USAID АГРО / Міжнародні донори",
-        "max_amount": "до 15 000 000 грн",
-        "min_own_percent": 30,
-        "target_kveds": "01.11, 01.61, 01.64, 10.41, 72.19",
-        "land_req": "від 100 га або діючі потужності зберігання/переробки",
-        "keywords": ["зерн", "насін", "супереліт", "еліт", "гірчиц", "кластер", "перероб", "експорт"],
-        "requirements": "Юридична особа або ФОП (реєстрація >1 року), залучення малих фермерів у ланцюг доданої вартості."
+        "code": "cluster_white_princess_seed",
+        "title": "Кластерний стартап «Біла Принцеса»: Базове та елітне насінництво",
+        "donor": "ННЦ «Інститут землеробства НААН» / Бізнес-інкубатор ІІБ",
+        "max_amount": "до 6 500 000 грн (венчурний пул)",
+        "min_own_percent": 25,
+        "target_kveds": "01.11, 01.64, 72.19",
+        "land_req": "від 1 га (Супереліта) до 300 га (І репродукція)",
+        "keywords": ["гірчиц", "біла принцеса", "насін", "супереліт", "еліт", "репродукц", "селекц", "зерн"],
+        "requirements": "Ліцензійна угода з НУС НААН, авансове передзамовлення селекції та контроль чистоти."
     },
     {
-        "code": "ye_robota_orchard_greenhouse",
-        "title": "Грант на розвиток садівництва, ягідництва та модульних теплиць",
-        "donor": "Мінагрополітики України / ДАР",
-        "max_amount": "до 7 000 000 грн (до 400 тис. грн/га)",
-        "min_own_percent": 30,
-        "target_kveds": "01.13, 01.24, 01.25, 01.26",
-        "land_req": "від 1 до 25 га у власності або оренді (від 7 років)",
-        "keywords": ["сад", "ягід", "теплиц", "горіх", "лохин", "яблун", "полив", "зрошен"],
-        "requirements": "Наявність затвердженого проєкту висадки насаджень або будівництва модульної теплиці."
-    },
-    {
-        "code": "dar_micro_agro",
-        "title": "Грантова підтримка малих агровиробників та інноваційного насінництва",
-        "donor": "Європейський Союз / Державний аграрний реєстр (ДАР)",
-        "max_amount": "до 1 500 000 грн",
+        "code": "cluster_science_transfer",
+        "title": "Експериментальний кластер трансферу ОІВ (Платформа Наука–Бізнес)",
+        "donor": "НААН України / Венчурний фонд ІІБ",
+        "max_amount": "до 5 000 000 грн",
         "min_own_percent": 15,
-        "target_kveds": "01.11, 01.13, 01.41, 01.64",
-        "land_req": "від 10 до 500 га",
-        "keywords": ["фермер", "зерн", "насін", "сидерат", "гірчиц", "технік", "добрив"],
-        "requirements": "Реєстрація у системі ДАР, прозора структура власності, позитивна кредитна та податкова історія."
+        "target_kveds": "72.11, 72.19, 70.22, 01.11",
+        "land_req": "Дослідно-демонстраційний полігон від 1 га",
+        "keywords": ["наук", "трансфер", "патент", "інновац", "драфт", "тизер", "кластер", "оів"],
+        "requirements": "Внесення майнових прав інтелектуальної власності на сорт у статутний капітал кластеру."
+    },
+    {
+        "code": "cluster_eco_siderat",
+        "title": "Агроекологічний кластер сидерації та органічного землеробства",
+        "donor": "Інститут землеробства НААН / Міжнародні еко-фонди",
+        "max_amount": "до 4 500 000 грн",
+        "min_own_percent": 30,
+        "target_kveds": "01.11, 01.13, 01.61",
+        "land_req": "від 50 до 500 га",
+        "keywords": ["сидерат", "органіч", "біофумігац", "родюч", "еколог", "експорт"],
+        "requirements": "Впровадження сівозмін із білою гірчицею для біофумігації та оздоровлення ґрунтів."
     }
 ]
 
@@ -57,11 +59,12 @@ def _extract_number(val: str) -> float:
     if not val:
         return 0.0
     nums = re.findall(r"\d+(?:[.,]\d+)?", str(val))
-    return float(nums[0].replace(",", ".")) if nums else 0.0
+    if not nums:
+        return 0.0
+    return float(nums[0].replace(",", "."))
 
 
 def evaluate_grants(profile_data: dict, grants: list = None) -> list:
-    """Ранжування грантових програм за спаданням індексу відповідності (Score)."""
     catalog = grants if grants else DEFAULT_GRANTS
     activity = (profile_data.get("activity_type") or "").lower()
     focus = (profile_data.get("investment_focus") or "").lower()
@@ -71,31 +74,32 @@ def evaluate_grants(profile_data: dict, grants: list = None) -> list:
 
     scored = []
     for g in catalog:
-        score = 60
+        score = 62
         reasons = []
         kw_list = g.get("keywords", [])
         if isinstance(kw_list, str):
             kw_list = [k.strip() for k in kw_list.split(",") if k.strip()]
 
-        if any(kw in combined_text for kw in kw_list):
-            score += 24
-            reasons.append("Цільовий напрям інвестицій збігається")
+        matched_kw = [kw for kw in kw_list if kw in combined_text]
+        if matched_kw:
+            score += 22
+            reasons.append("Технологічна спеціалізація учасника збігається з ланкою кластеру")
 
         target_kveds = g.get("target_kveds", "")
         if kved and any(prefix.strip()[:4] in kved for prefix in target_kveds.split(",") if prefix.strip()):
             score += 10
-            reasons.append("КВЕД відповідає умовам конкурсу")
+            reasons.append("Основний КВЕД відповідає вимогам програми")
 
         min_own = float(g.get("min_own_percent") or 0)
         if own_pct >= min_own:
             score += 8
-            reasons.append(f"Власний внесок покриває поріг ({int(min_own)}%)")
+            reasons.append(f"Частка співфінансування покриває нормативний поріг ({int(min_own)}%)")
         elif own_pct > 0 and own_pct < min_own:
-            score -= 10
-            reasons.append(f"Потрібно збільшити співфінансування до {int(min_own)}%")
+            score -= 8
+            reasons.append(f"Мінімальний рекомендований внесок становить {int(min_own)}%")
 
         score = max(35, min(98, score))
-        status = "Висока відповідність" if score >= 75 else "Потребує доопрацювання"
+        status = "Пріоритетна модель кластеру" if score >= 75 else "Доступно для кооперації"
 
         scored.append({
             "code": g.get("code"),
@@ -108,8 +112,12 @@ def evaluate_grants(profile_data: dict, grants: list = None) -> list:
             "requirements": g.get("requirements"),
             "score": score,
             "status": status,
-            "reason": "; ".join(reasons) if reasons else "Базова відповідність критеріям МСП АПК"
+            "reason": "; ".join(reasons) if reasons else "Базова відповідність критеріям трансферу технологій НААН–ІІБ"
         })
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored
+
+
+async def scrape_and_normalize_grants(api_key: str = "") -> list:
+    return DEFAULT_GRANTS

@@ -1,296 +1,121 @@
 <!DOCTYPE html>
 <html lang="uk">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgroGrant Analytics — Інтелектуальний грантовий асистент АПК</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>AgroGrant Analytics — Інтелектуальна система оцінки грантоспроможності АПК</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌾</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <style>
-        :root {
-            --bg-main: #f1f5f9;
-            --card-bg: #ffffff;
-            --text-primary: #0f172a;
-            --text-secondary: #475569;
-            --border-color: #e2e8f0;
-            --accent-green: #059669;
-            --accent-dark: #0f172a;
-        }
-        * { box-sizing: border-box; }
-        /* Фікс горизонтального переповнення шапки для Android-смартфонів */
-        html, body {
-            max-width: 100%;
-            overflow-x: hidden;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: var(--bg-main);
-            color: var(--text-primary);
-        }
-        .topbar {
-            width: 100%;
-            background: var(--accent-dark);
-            color: #fff;
-            padding: 14px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 3px solid var(--accent-green);
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .workspace {
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 0 16px;
-            display: grid;
-            grid-template-columns: 1.05fr 0.95fr;
-            gap: 20px;
-        }
-        @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
-        .card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            padding: 18px;
-            margin-bottom: 16px;
-        }
-        .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-        .chip {
-            font-size: 12px;
-            background: #f8fafc;
-            border: 1px solid #cbd5e1;
-            padding: 6px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        #chatbox {
-            height: 360px;
-            background: #f8fafc;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 14px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .msg { padding: 10px 14px; border-radius: 10px; max-width: 88%; font-size: 13.5px; line-height: 1.45; }
-        .user { background: var(--accent-dark); color: #fff; align-self: flex-end; }
-        .bot { background: #fff; border: 1px solid var(--border-color); align-self: flex-start; }
-        .controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-        #textInput { flex: 1; min-width: 180px; padding: 10px 12px; border-radius: 8px; border: 1px solid #cbd5e1; }
-        .btn { padding: 10px 14px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; color: #fff; background: var(--accent-dark); }
-        .btn-green { background: var(--accent-green); }
-        .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-        .profile-cell { background: #f8fafc; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
-        .grant-item { border: 1px solid var(--border-color); border-left: 4px solid var(--accent-green); border-radius: 8px; padding: 10px; margin-bottom: 8px; background: #f8fafc; font-size: 12.5px; }
-        #pdfOverlayWrapper {
-            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(15, 23, 42, 0.75); z-index: 99999; overflow: auto; justify-content: center; padding: 20px;
-        }
-        #pdfRenderTarget { width: 740px; background: #fff; color: #0f172a; padding: 24px; font-family: Arial, sans-serif; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-    <div id="pdfOverlayWrapper"><div id="pdfRenderTarget"></div></div>
+    <div id="pdfOverlayWrapper">
+        <div id="pdfRenderTarget"></div>
+    </div>
 
     <header class="topbar">
         <div>
-            <strong style="font-size: 18px;">🌾 AgroGrant Analytics</strong>
-            <div style="font-size: 12px; color: #94a3b8;">Інформаційне забезпечення оцінки грантоспроможності аграрних підприємств</div>
+            <h1 class="brand-title">🌾 AgroGrant Analytics</h1>
+            <span class="brand-sub">Інформаційне забезпечення оцінки грантоспроможності аграрних підприємств</span>
         </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <span style="font-size: 12px; color: #34d399; border: 1px solid #34d399; padding: 4px 10px; border-radius: 16px;">ЄДРПОУ & ДАР • Онлайн</span>
-            <a href="https://dn7734.github.io/Cluster/index.html" style="color: #e2e8f0; font-size: 12px; text-decoration: none; border: 1px solid #475569; padding: 5px 10px; border-radius: 6px;">До платформи Кластеру</a>
+        <div class="nav-actions">
+            <span class="status-badge">ЄДРПОУ & ДАР • Онлайн</span>
+            <a href="https://dn7734.github.io/Cluster/index.html" class="admin-link">← Платформа Кластеру</a>
+            <a href="admin.html" class="admin-link">Макроаналітика (Адмін)</a>
         </div>
     </header>
 
     <main class="workspace">
         <section class="card">
-            <h2 style="margin-top: 0; font-size: 16px;">Інтелектуальний асистент збору даних</h2>
-            <div class="chips">
-                <button class="chip" data-q="ЄДРПОУ 03728915, ФГ Подільський Колос, 300 га зернових та гірчиці, власний внесок 30%">ЄДРПОУ 03728915 (Зернові/Насіння)</button>
-                <button class="chip" data-q="ЄДРПОУ 38492014, ТОВ Сади Поділля, 18 га саду, власний внесок 30%">ЄДРПОУ 38492014 (Садівництво)</button>
-                <button class="chip" data-q="ЄДРПОУ 41258963, ТОВ Агро-Еко Переробка, лінія виробництва олії, внесок 35%">ЄДРПОУ 41258963 (Переробка)</button>
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Інтелектуальний асистент збору даних</h2>
+                    <span class="card-subtitle">Введіть 8-значний код ЄДРПОУ або опишіть господарство текстом чи голосом</span>
+                </div>
+                <button id="resetSessionBtn" class="chip" title="Очистити анкету">Очистити сесію</button>
             </div>
+
+            <div class="quick-chips">
+                <button class="chip" data-query="ЄДРПОУ 03728915, ФГ Подільський Колос, вирощування зернових та гірчиці 300 га, власний внесок 30%">ЄДРПОУ 03728915 (Зернові)</button>
+                <button class="chip" data-query="ЄДРПОУ 38492014, ТОВ Поділля-Сад, закладання інтенсивного саду 25 га з крапельним зрошенням, внесок 30%">ЄДРПОУ 38492014 (Садівництво)</button>
+                <button class="chip" data-query="ЄДРПОУ 41258963, ТОВ Агро-Еко Переробка, лінія глибокої переробки олійних культур, власний внесок 35%">ЄДРПОУ 41258963 (Переробка)</button>
+            </div>
+
             <div id="chatbox">
-                <div class="msg bot"><strong>AgroGrant:</strong><br>Вітаю! Введіть 8-значний код ЄДРПОУ або опишіть господарство для розрахунку рейтингу грантів.</div>
+                <div class="msg bot">
+                    <strong>AgroGrant:</strong><br>
+                    Вітаю! Введіть 8-значний код ЄДРПОУ для автоматичного заповнення реєстраційних даних або розкажіть про напрям діяльності та потреби у фінансуванні.
+                </div>
             </div>
+
             <div class="controls">
                 <input type="text" id="textInput" placeholder="Введіть код ЄДРПОУ або текст...">
-                <button id="sendBtn" class="btn">Надіслати</button>
-                <button id="voiceBtn" class="btn btn-green">Голос</button>
+                <button id="sendBtn" class="btn" style="background: var(--accent-dark);">Надіслати</button>
+                <button id="voiceBtn" class="btn" style="background: var(--accent-green);">Голос</button>
             </div>
         </section>
 
-        <section class="card">
-            <h2 style="margin-top: 0; font-size: 16px;">Реєстраційна картка та параметри АПК</h2>
-            <div class="profile-grid">
-                <div class="profile-cell"><strong>ЄДРПОУ:</strong> <span id="p_edrpou">03728915</span></div>
-                <div class="profile-cell"><strong>Регіон:</strong> <span id="p_region">Вінницька область</span></div>
-                <div class="profile-cell" style="grid-column: span 2;"><strong>Підприємство:</strong> <span id="p_company">ФГ «ПОДІЛЬСЬКИЙ КОЛОС»</span></div>
-                <div class="profile-cell"><strong>Масштаб:</strong> <span id="p_size">300 га</span></div>
-                <div class="profile-cell"><strong>Власний внесок:</strong> <span id="p_own">30%</span></div>
+        <section>
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Реєстраційна картка та параметри АПК</h2>
+                        <span class="card-subtitle" id="verifyBadge" style="color: var(--accent-green); font-weight: 600;">Готово до скорингу</span>
+                    </div>
+                </div>
+
+                <div class="profile-grid">
+                    <div class="profile-cell">
+                        <span class="cell-label">Код ЄДРПОУ</span>
+                        <span class="cell-value" id="p_edrpou">03728915</span>
+                    </div>
+                    <div class="profile-cell">
+                        <span class="cell-label">Регіон</span>
+                        <span class="cell-value" id="p_region">Вінницька область</span>
+                    </div>
+                    <div class="profile-cell full-width">
+                        <span class="cell-label">Найменування підприємства</span>
+                        <span class="cell-value" id="p_company">ФГ «ПОДІЛЬСЬКИЙ КОЛОС»</span>
+                    </div>
+                    <div class="profile-cell full-width">
+                        <span class="cell-label">Основний КВЕД</span>
+                        <span class="cell-value" id="p_kved">01.11 Вирощування зернових і технічних культур</span>
+                    </div>
+                    <div class="profile-cell">
+                        <span class="cell-label">Земельний банк / Масштаб</span>
+                        <span class="cell-value" id="p_size">300 га</span>
+                    </div>
+                    <div class="profile-cell">
+                        <span class="cell-label">Власне співфінансування</span>
+                        <span class="cell-value" id="p_own">30%</span>
+                    </div>
+                    <div class="profile-cell full-width">
+                        <span class="cell-label">Інвестиційний фокус</span>
+                        <span class="cell-value" id="p_focus">Модернізація виробництва та глибока переробка</span>
+                    </div>
+                </div>
+
+                <div class="export-bar-grid">
+                    <button id="downloadPdfBtn" class="btn" style="background: var(--accent-green);">Завантажити звіт (PDF)</button>
+                    <button id="downloadDocxBtn" class="btn" style="background: var(--accent-dark);">Грантова заявка (DOCX)</button>
+                </div>
             </div>
 
-            <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-                <button id="pdfExportBtn" class="btn btn-green" style="flex: 1;">Завантажити Звіт (PDF)</button>
-                <button id="docxExportBtn" class="btn" style="flex: 1;">Завантажити Заявку (DOCX)</button>
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Рейтинг релевантності грантових програм (Скоринг)</h2>
+                        <span class="card-subtitle">Програми відсортовано за спаданням відсотка відповідності</span>
+                    </div>
+                </div>
+                <div id="grantsContainer"></div>
             </div>
-
-            <h3 style="font-size: 14px; margin: 10px 0 8px 0;">Рейтинг відповідності грантовим програмам:</h3>
-            <div id="grantsList"></div>
         </section>
     </main>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const BACKEND_URL = "https://agrogrant.onrender.com";
-            let userId = localStorage.getItem("agrogrant_uid");
-            if (!userId) {
-                userId = crypto.randomUUID ? crypto.randomUUID() : "f239164a-0eab-4bb8-b933-353fb2b13422";
-                localStorage.setItem("agrogrant_uid", userId);
-            }
-
-            const chatbox = document.getElementById("chatbox");
-            const textInput = document.getElementById("textInput");
-
-            function addMsg(sender, html) {
-                const d = document.createElement("div");
-                d.className = "msg " + (sender === "Ви" ? "user" : "bot");
-                d.innerHTML = `<strong>${sender}:</strong><br>${html}`;
-                chatbox.appendChild(d);
-                chatbox.scrollTop = chatbox.scrollHeight;
-            }
-
-            function renderGrants(grants) {
-                const box = document.getElementById("grantsList");
-                box.innerHTML = "";
-                (grants || []).forEach(g => {
-                    box.innerHTML += `
-                        <div class="grant-item">
-                            <div style="display:flex; justify-content:space-between; font-weight:bold;">
-                                <span>${g.title}</span>
-                                <span style="color:#059669;">${g.score}%</span>
-                            </div>
-                            <div style="color:#475569; margin-top:3px;">Донор: ${g.donor} | Сума: ${g.max_amount}</div>
-                            <div style="color:#0f172a; margin-top:3px;"><em>${g.reason}</em></div>
-                        </div>
-                    `;
-                });
-            }
-
-            async function sendQuery(text) {
-                const clean = text.trim();
-                if (!clean) return;
-                addMsg("Ви", clean);
-                try {
-                    const res = await fetch(`${BACKEND_URL}/chat/${userId}`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ message: clean })
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        addMsg("AgroGrant", data.reply);
-                        if (data.profile) {
-                            if (data.profile.edrpou) document.getElementById("p_edrpou").textContent = data.profile.edrpou;
-                            if (data.profile.company_name) document.getElementById("p_company").textContent = data.profile.company_name;
-                            if (data.profile.region) document.getElementById("p_region").textContent = data.profile.region;
-                            if (data.profile.size_category) document.getElementById("p_size").textContent = data.profile.size_category;
-                            if (data.profile.own_contribution_percent) document.getElementById("p_own").textContent = data.profile.own_contribution_percent;
-                        }
-                        if (data.grants) renderGrants(data.grants);
-                        return;
-                    }
-                } catch (e) {}
-                addMsg("AgroGrant", "Запит оброблено локальним модулем скорингу. Ви можете вивантажити звіт у PDF або DOCX.");
-            }
-
-            // Одноразова ініціалізація профілю при старті (усуває нескінченний полінг у логах Render)
-            fetch(`${BACKEND_URL}/profile/${userId}`)
-                .then(r => r.json())
-                .then(d => { if (d.grants) renderGrants(d.grants); })
-                .catch(() => {});
-
-            // Прийом даних через інтеграційний міст із платформи Кластеру (?data=...)
-            const urlParams = new URLSearchParams(window.location.search);
-            const bridgeData = urlParams.get("data");
-            if (bridgeData) {
-                textInput.value = bridgeData;
-                sendQuery(bridgeData);
-            }
-
-            document.getElementById("sendBtn").addEventListener("click", () => {
-                sendQuery(textInput.value);
-                textInput.value = "";
-            });
-            textInput.addEventListener("keydown", (e) => {
-                if (e.key === "Enter") { sendQuery(textInput.value); textInput.value = ""; }
-            });
-            document.querySelectorAll(".chip").forEach(b => {
-                b.addEventListener("click", () => sendQuery(b.getAttribute("data-q")));
-            });
-
-            // КРОСПЛАТФОРМНИЙ ГОЛОСОВИЙ ВВІД (виправляє дублювання фраз на Android Chrome)
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const voiceBtn = document.getElementById("voiceBtn");
-            if (SpeechRecognition) {
-                const recognition = new SpeechRecognition();
-                recognition.lang = "uk-UA";
-                recognition.continuous = false;
-                recognition.interimResults = false;
-
-                voiceBtn.addEventListener("click", () => {
-                    voiceBtn.textContent = "Слухаю...";
-                    recognition.start();
-                });
-
-                recognition.onresult = (event) => {
-                    const lastIdx = event.results.length - 1;
-                    const transcript = event.results[lastIdx][0].transcript.trim();
-                    textInput.value = transcript;
-                    voiceBtn.textContent = "Голос";
-                };
-
-                recognition.onerror = () => { voiceBtn.textContent = "Голос"; };
-                recognition.onend = () => { voiceBtn.textContent = "Голос"; };
-            } else {
-                voiceBtn.style.display = "none";
-            }
-
-            // Надійний рендеринг PDF-звіту через Viewport Overlay
-            document.getElementById("pdfExportBtn").addEventListener("click", async () => {
-                const wrapper = document.getElementById("pdfOverlayWrapper");
-                const target = document.getElementById("pdfRenderTarget");
-                target.innerHTML = `
-                    <h2 style="color:#059669; margin-top:0;">АНАЛІТИЧНИЙ ЗВІТ ГРАНТОСПРОМОЖНОСТІ АПК</h2>
-                    <p><strong>Підприємство:</strong> ${document.getElementById("p_company").textContent} (ЄДРПОУ ${document.getElementById("p_edrpou").textContent})</p>
-                    <p><strong>Регіон:</strong> ${document.getElementById("p_region").textContent} | <strong>Масштаб:</strong> ${document.getElementById("p_size").textContent} | <strong>Внесок:</strong> ${document.getElementById("p_own").textContent}</p>
-                    <hr>
-                    <h3>Рекомендовані грантові програми:</h3>
-                    ${document.getElementById("grantsList").innerHTML}
-                `;
-                wrapper.style.display = "flex";
-                window.scrollTo(0, 0);
-                await new Promise(r => setTimeout(r, 150));
-                try {
-                    await html2pdf().set({
-                        margin: 10,
-                        filename: "AgroGrant_Report.pdf",
-                        html2canvas: { scale: 2, scrollY: 0 }
-                    }).from(target).save();
-                } finally {
-                    wrapper.style.display = "none";
-                    target.innerHTML = "";
-                }
-            });
-
-            document.getElementById("docxExportBtn").addEventListener("click", () => {
-                window.open(`${BACKEND_URL}/export/${userId}`, "_blank");
-            });
-        });
-    </script>
+    <script src="script.js"></script>
 </body>
+
 </html>
