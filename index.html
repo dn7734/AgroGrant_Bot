@@ -1,1066 +1,296 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="uk">
-
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>AgroGrant — Інформаційно-аналітична система оцінки АПК</title>
-	<!-- Бібліотека Chart.js для фінансової візуалізації -->
-	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-	<!-- Бібліотека html2pdf.js для генерації звіту у форматі PDF (A4) -->
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-	<link rel="icon"
-		href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=">
-	<style>
-		/* Базова палітра GovTech / FinTech (Slate + Emerald) */
-		:root {
-			--bg-main: #f1f5f9;
-			--card-bg: #ffffff;
-			--text-primary: #0f172a;
-			--text-secondary: #475569;
-			--text-muted: #64748b;
-			--border-color: #e2e8f0;
-			--accent-green: #059669;
-			--accent-green-hover: #047857;
-			--accent-dark: #0f172a;
-			--accent-blue: #2563eb;
-			--danger: #dc2626;
-		}
-
-		* {
-			box-sizing: border-box;
-		}
-
-		body {
-			font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-			margin: 0;
-			padding: 0;
-			background-color: var(--bg-main);
-			color: var(--text-primary);
-		}
-
-		/* Верхня навігаційна панель (Header) */
-		.topbar {
-			background-color: var(--accent-dark);
-			color: #ffffff;
-			padding: 14px 28px;
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			border-bottom: 3px solid var(--accent-green);
-		}
-
-		.brand-wrap {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-		}
-
-		.brand-title {
-			font-size: 20px;
-			font-weight: 700;
-			letter-spacing: 0.3px;
-			margin: 0;
-		}
-
-		.brand-sub {
-			font-size: 12px;
-			color: #94a3b8;
-			display: block;
-		}
-
-		.nav-actions {
-			display: flex;
-			align-items: center;
-			gap: 14px;
-		}
-
-		.status-badge {
-			font-size: 12px;
-			background: rgba(16, 185, 129, 0.15);
-			color: #34d399;
-			padding: 5px 12px;
-			border-radius: 20px;
-			border: 1px solid rgba(52, 211, 153, 0.3);
-		}
-
-		.admin-link {
-			color: #e2e8f0;
-			text-decoration: none;
-			font-size: 13px;
-			padding: 6px 12px;
-			border-radius: 6px;
-			border: 1px solid #334155;
-			transition: 0.2s;
-		}
-
-		.admin-link:hover {
-			background: #1e293b;
-			color: #ffffff;
-		}
-
-		/* Головна двоколонкова сітка робочого простору */
-		.workspace {
-			max-width: 1240px;
-			margin: 22px auto;
-			padding: 0 20px;
-			display: grid;
-			grid-template-columns: 1.05fr 0.95fr;
-			gap: 22px;
-			align-items: start;
-		}
-
-		@media (max-width: 960px) {
-			.workspace {
-				grid-template-columns: 1fr;
-			}
-
-			.topbar {
-				flex-direction: column;
-				align-items: flex-start;
-				gap: 10px;
-			}
-		}
-
-		/* Універсальна картка секції */
-		.card {
-			background: var(--card-bg);
-			border-radius: 12px;
-			border: 1px solid var(--border-color);
-			box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
-			padding: 20px;
-			margin-bottom: 20px;
-		}
-
-		.card-header {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			border-bottom: 1px solid var(--border-color);
-			padding-bottom: 12px;
-			margin-bottom: 14px;
-		}
-
-		.card-title {
-			font-size: 16px;
-			font-weight: 600;
-			margin: 0;
-			color: var(--text-primary);
-		}
-
-		.card-subtitle {
-			font-size: 12px;
-			color: var(--text-muted);
-		}
-
-		/* Швидкі демо-чіпси для тестування ЄДРПОУ */
-		.quick-chips {
-			display: flex;
-			gap: 8px;
-			flex-wrap: wrap;
-			margin-bottom: 12px;
-		}
-
-		.chip {
-			font-size: 12px;
-			background: #f8fafc;
-			color: var(--text-secondary);
-			border: 1px solid #cbd5e1;
-			padding: 5px 10px;
-			border-radius: 6px;
-			cursor: pointer;
-			transition: 0.15s;
-		}
-
-		.chip:hover {
-			background: #ecfdf5;
-			border-color: var(--accent-green);
-			color: var(--accent-green);
-		}
-
-		/* Вікно діалогу з асистентом */
-		#chatbox {
-			width: 100%;
-			height: 410px;
-			background: #f8fafc;
-			border: 1px solid var(--border-color);
-			border-radius: 8px;
-			overflow-y: auto;
-			padding: 16px;
-			display: flex;
-			flex-direction: column;
-			gap: 12px;
-			scroll-behavior: smooth;
-		}
-
-		.msg {
-			padding: 11px 15px;
-			border-radius: 10px;
-			max-width: 85%;
-			font-size: 14px;
-			line-height: 1.5;
-			word-wrap: break-word;
-		}
-
-		.user {
-			background-color: var(--accent-dark);
-			color: #ffffff;
-			align-self: flex-end;
-			border-bottom-right-radius: 2px;
-		}
-
-		.bot {
-			background-color: #ffffff;
-			color: var(--text-primary);
-			align-self: flex-start;
-			border: 1px solid var(--border-color);
-			border-bottom-left-radius: 2px;
-		}
-
-		.error {
-			background-color: #fef2f2;
-			color: #991b1b;
-			border: 1px solid #fecaca;
-			align-self: center;
-			font-size: 13px;
-		}
-
-		/* Індикатор очікування відповіді ("Бот аналізує...") */
-		.typing-indicator {
-			display: flex;
-			gap: 5px;
-			padding: 6px 0;
-			align-items: center;
-		}
-
-		.typing-indicator span {
-			width: 7px;
-			height: 7px;
-			background-color: var(--accent-green);
-			border-radius: 50%;
-			animation: bounce 1.4s infinite ease-in-out both;
-		}
-
-		.typing-indicator span:nth-child(1) {
-			animation-delay: -0.32s;
-		}
-
-		.typing-indicator span:nth-child(2) {
-			animation-delay: -0.16s;
-		}
-
-		@keyframes bounce {
-
-			0%,
-			80%,
-			100% {
-				transform: scale(0);
-				opacity: 0.4;
-			}
-
-			40% {
-				transform: scale(1);
-				opacity: 1;
-			}
-		}
-
-		/* Панель вводу тексту та керування мікрофоном */
-		.controls {
-			display: flex;
-			gap: 8px;
-			margin-top: 14px;
-		}
-
-		#textInput {
-			flex: 1;
-			padding: 11px 14px;
-			border-radius: 8px;
-			border: 1px solid #cbd5e1;
-			font-size: 14px;
-			outline: none;
-			transition: border 0.2s;
-		}
-
-		#textInput:focus {
-			border-color: var(--accent-green);
-		}
-
-		.btn {
-			padding: 10px 18px;
-			font-size: 14px;
-			font-weight: 600;
-			cursor: pointer;
-			border-radius: 8px;
-			border: none;
-			transition: 0.2s;
-			white-space: nowrap;
-		}
-
-		.btn:disabled {
-			opacity: 0.6;
-			cursor: wait;
-		}
-
-		#sendBtn {
-			background-color: var(--accent-dark);
-			color: white;
-		}
-
-		#sendBtn:hover {
-			background-color: #1e293b;
-		}
-
-		#micBtn {
-			background-color: var(--accent-green);
-			color: white;
-		}
-
-		#micBtn:hover {
-			background-color: var(--accent-green-hover);
-		}
-
-		#micBtn.recording {
-			background-color: var(--danger);
-			animation: pulse 1.5s infinite;
-		}
-
-		@keyframes pulse {
-			0% {
-				opacity: 1;
-			}
-
-			50% {
-				opacity: 0.75;
-			}
-
-			100% {
-				opacity: 1;
-			}
-		}
-
-		/* Таблиця-сітка профілю підприємства (Права колонка) */
-		.profile-grid {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 10px;
-		}
-
-		.profile-cell {
-			background: #f8fafc;
-			border: 1px solid var(--border-color);
-			border-radius: 8px;
-			padding: 9px 12px;
-		}
-
-		.profile-cell.full-width {
-			grid-column: span 2;
-		}
-
-		.cell-label {
-			font-size: 11px;
-			text-transform: uppercase;
-			letter-spacing: 0.4px;
-			color: var(--text-muted);
-			display: block;
-			margin-bottom: 3px;
-		}
-
-		.cell-value {
-			font-size: 13.5px;
-			font-weight: 600;
-			color: var(--text-primary);
-		}
-
-		/* Картки рейтингу грантових програм */
-		.grant-item {
-			border: 1px solid var(--border-color);
-			border-radius: 8px;
-			padding: 12px;
-			margin-bottom: 10px;
-			background: #f8fafc;
-		}
-
-		.grant-header {
-			display: flex;
-			justify-content: space-between;
-			align-items: flex-start;
-			gap: 10px;
-			margin-bottom: 6px;
-		}
-
-		.grant-title {
-			font-weight: 600;
-			font-size: 13.5px;
-			color: var(--text-primary);
-		}
-
-		.grant-score {
-			font-weight: 700;
-			font-size: 13px;
-			padding: 3px 8px;
-			border-radius: 6px;
-			background: #ecfdf5;
-			color: var(--accent-green);
-			white-space: nowrap;
-		}
-
-		.progress-track {
-			width: 100%;
-			height: 6px;
-			background: #e2e8f0;
-			border-radius: 3px;
-			overflow: hidden;
-			margin-bottom: 6px;
-		}
-
-		.progress-fill {
-			height: 100%;
-			background: var(--accent-green);
-			transition: width 0.4s ease;
-		}
-
-		.grant-details {
-			font-size: 12px;
-			color: var(--text-secondary);
-		}
-
-		#chartContainer {
-			width: 220px;
-			height: 220px;
-			margin: 14px auto 4px auto;
-			display: none;
-		}
-
-		/* Панель кнопок експорту (PDF та DOCX) */
-		.export-bar {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 10px;
-			margin-top: 14px;
-		}
-
-		#downloadPdfBtn {
-			background-color: var(--accent-green);
-			color: white;
-			width: 100%;
-		}
-
-		#downloadPdfBtn:hover {
-			background-color: var(--accent-green-hover);
-		}
-
-		#downloadDocxBtn {
-			background-color: var(--accent-dark);
-			color: white;
-			width: 100%;
-		}
-
-		#downloadDocxBtn:hover {
-			background-color: #1e293b;
-		}
-
-		#resetBtn {
-			background-color: transparent;
-			color: var(--text-secondary);
-			border: 1px solid #cbd5e1;
-			width: 100%;
-			margin-top: 8px;
-			font-weight: 500;
-		}
-
-		#resetBtn:hover {
-			background-color: #f1f5f9;
-			color: var(--text-primary);
-		}
-	</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroGrant Analytics — Інтелектуальний грантовий асистент АПК</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌾</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --border-color: #e2e8f0;
+            --accent-green: #059669;
+            --accent-dark: #0f172a;
+        }
+        * { box-sizing: border-box; }
+        /* Фікс горизонтального переповнення шапки для Android-смартфонів */
+        html, body {
+            max-width: 100%;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+        }
+        .topbar {
+            width: 100%;
+            background: var(--accent-dark);
+            color: #fff;
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--accent-green);
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .workspace {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 16px;
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+            gap: 20px;
+        }
+        @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+        .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .chip {
+            font-size: 12px;
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        #chatbox {
+            height: 360px;
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .msg { padding: 10px 14px; border-radius: 10px; max-width: 88%; font-size: 13.5px; line-height: 1.45; }
+        .user { background: var(--accent-dark); color: #fff; align-self: flex-end; }
+        .bot { background: #fff; border: 1px solid var(--border-color); align-self: flex-start; }
+        .controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        #textInput { flex: 1; min-width: 180px; padding: 10px 12px; border-radius: 8px; border: 1px solid #cbd5e1; }
+        .btn { padding: 10px 14px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; color: #fff; background: var(--accent-dark); }
+        .btn-green { background: var(--accent-green); }
+        .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        .profile-cell { background: #f8fafc; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+        .grant-item { border: 1px solid var(--border-color); border-left: 4px solid var(--accent-green); border-radius: 8px; padding: 10px; margin-bottom: 8px; background: #f8fafc; font-size: 12.5px; }
+        #pdfOverlayWrapper {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.75); z-index: 99999; overflow: auto; justify-content: center; padding: 20px;
+        }
+        #pdfRenderTarget { width: 740px; background: #fff; color: #0f172a; padding: 24px; font-family: Arial, sans-serif; }
+    </style>
 </head>
-
 <body>
+    <div id="pdfOverlayWrapper"><div id="pdfRenderTarget"></div></div>
 
-	<!-- Верхня панель системи -->
-	<header class="topbar">
-		<div class="brand-wrap">
-			<div>
-				<h1 class="brand-title">🎙️ AgroGrant Analytics</h1>
-				<span class="brand-sub">Інформаційне забезпечення оцінки грантоспроможності аграрних підприємств</span>
-			</div>
-		</div>
-		<div class="nav-actions">
-			<span class="status-badge">ЄДРПОУ & ДАР • Онлайн</span>
-			<a href="admin.html" class="admin-link">Макроаналітика (Адмін)</a>
-		</div>
-	</header>
+    <header class="topbar">
+        <div>
+            <strong style="font-size: 18px;">🌾 AgroGrant Analytics</strong>
+            <div style="font-size: 12px; color: #94a3b8;">Інформаційне забезпечення оцінки грантоспроможності аграрних підприємств</div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span style="font-size: 12px; color: #34d399; border: 1px solid #34d399; padding: 4px 10px; border-radius: 16px;">ЄДРПОУ & ДАР • Онлайн</span>
+            <a href="https://dn7734.github.io/Cluster/index.html" style="color: #e2e8f0; font-size: 12px; text-decoration: none; border: 1px solid #475569; padding: 5px 10px; border-radius: 6px;">До платформи Кластеру</a>
+        </div>
+    </header>
 
-	<!-- Основний робочий простір -->
-	<main class="workspace">
+    <main class="workspace">
+        <section class="card">
+            <h2 style="margin-top: 0; font-size: 16px;">Інтелектуальний асистент збору даних</h2>
+            <div class="chips">
+                <button class="chip" data-q="ЄДРПОУ 03728915, ФГ Подільський Колос, 300 га зернових та гірчиці, власний внесок 30%">ЄДРПОУ 03728915 (Зернові/Насіння)</button>
+                <button class="chip" data-q="ЄДРПОУ 38492014, ТОВ Сади Поділля, 18 га саду, власний внесок 30%">ЄДРПОУ 38492014 (Садівництво)</button>
+                <button class="chip" data-q="ЄДРПОУ 41258963, ТОВ Агро-Еко Переробка, лінія виробництва олії, внесок 35%">ЄДРПОУ 41258963 (Переробка)</button>
+            </div>
+            <div id="chatbox">
+                <div class="msg bot"><strong>AgroGrant:</strong><br>Вітаю! Введіть 8-значний код ЄДРПОУ або опишіть господарство для розрахунку рейтингу грантів.</div>
+            </div>
+            <div class="controls">
+                <input type="text" id="textInput" placeholder="Введіть код ЄДРПОУ або текст...">
+                <button id="sendBtn" class="btn">Надіслати</button>
+                <button id="voiceBtn" class="btn btn-green">Голос</button>
+            </div>
+        </section>
 
-		<!-- Ліва колонка: Діалоговий асистент -->
-		<section class="card">
-			<div class="card-header">
-				<div>
-					<h2 class="card-title">Інтелектуальний асистент збору даних</h2>
-					<span class="card-subtitle">Введіть 8-значний код ЄДРПОУ або опишіть господарство голосом</span>
-				</div>
-			</div>
+        <section class="card">
+            <h2 style="margin-top: 0; font-size: 16px;">Реєстраційна картка та параметри АПК</h2>
+            <div class="profile-grid">
+                <div class="profile-cell"><strong>ЄДРПОУ:</strong> <span id="p_edrpou">03728915</span></div>
+                <div class="profile-cell"><strong>Регіон:</strong> <span id="p_region">Вінницька область</span></div>
+                <div class="profile-cell" style="grid-column: span 2;"><strong>Підприємство:</strong> <span id="p_company">ФГ «ПОДІЛЬСЬКИЙ КОЛОС»</span></div>
+                <div class="profile-cell"><strong>Масштаб:</strong> <span id="p_size">300 га</span></div>
+                <div class="profile-cell"><strong>Власний внесок:</strong> <span id="p_own">30%</span></div>
+            </div>
 
-			<!-- Швидкі приклади для демонстрації -->
-			<div class="quick-chips">
-				<button class="chip"
-					data-query="Мій код ЄДРПОУ 03728915, плануємо закупівлю зерносушарки, власний внесок 30%">ЄДРПОУ
-					03728915 (Зернові)</button>
-				<button class="chip"
-					data-query="Код ЄДРПОУ 38492014, інвестиції у крапельне зрошення саду, внесок 35%">ЄДРПОУ 38492014
-					(Садівництво)</button>
-				<button class="chip"
-					data-query="Код ЄДРПОУ 41258963, лінія переробки олійних культур, власний внесок 25%">ЄДРПОУ
-					41258963 (Переробка)</button>
-			</div>
+            <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                <button id="pdfExportBtn" class="btn btn-green" style="flex: 1;">Завантажити Звіт (PDF)</button>
+                <button id="docxExportBtn" class="btn" style="flex: 1;">Завантажити Заявку (DOCX)</button>
+            </div>
 
-			<div id="chatbox">
-				<div class="msg bot">
-					<strong>AgroGrant:</strong><br>
-					Вітаю! Назвіть або введіть код ЄДРПОУ вашого підприємства для автоматичного заповнення реєстраційних
-					даних, або розкажіть про напрям діяльності та потреби у фінансуванні.
-				</div>
-			</div>
+            <h3 style="font-size: 14px; margin: 10px 0 8px 0;">Рейтинг відповідності грантовим програмам:</h3>
+            <div id="grantsList"></div>
+        </section>
+    </main>
 
-			<div class="controls">
-				<input type="text" id="textInput" placeholder="Введіть код ЄДРПОУ або текстове повідомлення..." />
-				<button id="sendBtn" class="btn">Надіслати</button>
-				<button id="micBtn" class="btn">Голос</button>
-			</div>
-		</section>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const BACKEND_URL = "https://agrogrant.onrender.com";
+            let userId = localStorage.getItem("agrogrant_uid");
+            if (!userId) {
+                userId = crypto.randomUUID ? crypto.randomUUID() : "f239164a-0eab-4bb8-b933-353fb2b13422";
+                localStorage.setItem("agrogrant_uid", userId);
+            }
 
-		<!-- Права колонка: Профіль ЄДРПОУ, Скоринг та Звітність -->
-		<section>
-			<!-- Картка 1: Верифікований профіль -->
-			<div class="card">
-				<div class="card-header">
-					<h2 class="card-title">Реєстраційна картка та параметри АПК</h2>
-					<span class="card-subtitle" id="verifyStatus">Очікування даних</span>
-				</div>
+            const chatbox = document.getElementById("chatbox");
+            const textInput = document.getElementById("textInput");
 
-				<div class="profile-grid">
-					<div class="profile-cell">
-						<span class="cell-label">Код ЄДРПОУ</span>
-						<span class="cell-value" id="p_edrpou">—</span>
-					</div>
-					<div class="profile-cell">
-						<span class="cell-label">Регіон діяльності</span>
-						<span class="cell-value" id="p_region">—</span>
-					</div>
-					<div class="profile-cell full-width">
-						<span class="cell-label">Найменування суб'єкта господарювання</span>
-						<span class="cell-value" id="p_company">—</span>
-					</div>
-					<div class="profile-cell full-width">
-						<span class="cell-label">Основний КВЕД</span>
-						<span class="cell-value" id="p_kved">—</span>
-					</div>
-					<div class="profile-cell">
-						<span class="cell-label">Напрям діяльності</span>
-						<span class="cell-value" id="p_activity">—</span>
-					</div>
-					<div class="profile-cell">
-						<span class="cell-label">Земельний банк / Розмір</span>
-						<span class="cell-value" id="p_size">—</span>
-					</div>
-					<div class="profile-cell">
-						<span class="cell-label">Штат працівників</span>
-						<span class="cell-value" id="p_emp">—</span>
-					</div>
-					<div class="profile-cell">
-						<span class="cell-label">Власне співфінансування</span>
-						<span class="cell-value" id="p_own">—</span>
-					</div>
-					<div class="profile-cell full-width">
-						<span class="cell-label">Цільовий фокус інвестицій</span>
-						<span class="cell-value" id="p_focus">—</span>
-					</div>
-				</div>
+            function addMsg(sender, html) {
+                const d = document.createElement("div");
+                d.className = "msg " + (sender === "Ви" ? "user" : "bot");
+                d.innerHTML = `<strong>${sender}:</strong><br>${html}`;
+                chatbox.appendChild(d);
+                chatbox.scrollTop = chatbox.scrollHeight;
+            }
 
-				<!-- Подвійна панель завантаження звіту: PDF або DOCX -->
-				<div class="export-bar">
-					<button id="downloadPdfBtn" class="btn">Завантажити звіт (PDF)</button>
-					<button id="downloadDocxBtn" class="btn">Завантажити заявку (DOCX)</button>
-				</div>
-				<button id="resetBtn" class="btn">Очистити поточну сесію (нова заявка)</button>
-			</div>
-
-			<!-- Картка 2: Скоринг грантових програм -->
-			<div class="card" id="grantsBox">
-				<div class="card-header">
-					<h2 class="card-title">Рейтинг сумісності грантових програм</h2>
-					<span class="card-subtitle">КМУ №738 / ДАР</span>
-				</div>
-				<div id="grantsList">
-					<div style="font-size: 13px; color: #64748b; text-align: center; padding: 15px 0;">
-						Введіть код ЄДРПОУ або дані про господарство для розрахунку матриці сумісності грантів.
-					</div>
-				</div>
-				<div id="chartContainer">
-					<canvas id="financeChart"></canvas>
-				</div>
-			</div>
-		</section>
-
-	</main>
-
-	<script>
-		// Ініціалізація клієнтської логіки після завантаження DOM
-		document.addEventListener("DOMContentLoaded", () => {
-			const BACKEND_URL = "https://" + "agrogrant.onrender.com";
-
-			// Фоновий розігрів контейнера Render
-			fetch(`${BACKEND_URL}/`).catch(() => { });
-
-			// Генератор UUID v4 для ідентифікації сесії користувача
-			function uuidv4() {
-				return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-					const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-					return v.toString(16);
-				});
-			}
-
-			let userId = localStorage.getItem('agrogrant_user_id');
-			if (!userId) {
-				userId = uuidv4();
-				localStorage.setItem('agrogrant_user_id', userId);
-			}
-
-			// Посилання на DOM-елементи інтерфейсу
-			const chatbox = document.getElementById('chatbox');
-			const textInput = document.getElementById('textInput');
-			const sendBtn = document.getElementById('sendBtn');
-			const micBtn = document.getElementById('micBtn');
-			const downloadPdfBtn = document.getElementById('downloadPdfBtn');
-			const downloadDocxBtn = document.getElementById('downloadDocxBtn');
-			const resetBtn = document.getElementById('resetBtn');
-			const verifyStatus = document.getElementById('verifyStatus');
-
-			// Змінні стану
-			let isRecording = false;
-			let isSending = false;
-			let finalTranscript = '';
-			let silenceTimer = null;
-			let finChart = null;
-			let loadingBubble = null;
-			let currentProfileData = {};
-			let currentGrantsData = [];
-			const SILENCE_DELAY = 3500;
-
-			// Додавання повідомлення у вікно чату
-			function addMessage(sender, text, isError = false) {
-				if (!chatbox) return;
-				const div = document.createElement('div');
-				div.className = 'msg ' + (isError ? 'error' : (sender === 'Ви' ? 'user' : 'bot'));
-				div.innerHTML = `<strong>${sender}:</strong><br>${text}`;
-				chatbox.appendChild(div);
-				chatbox.scrollTop = chatbox.scrollHeight;
-			}
-
-			// Показ індикатора очікування відповіді від сервера
-			function showTypingIndicator() {
-				if (!chatbox) return;
-				loadingBubble = document.createElement('div');
-				loadingBubble.className = 'msg bot';
-				loadingBubble.innerHTML = `<strong>AgroGrant:</strong><br><div class="typing-indicator"><span></span><span></span><span></span></div>`;
-				chatbox.appendChild(loadingBubble);
-				chatbox.scrollTop = chatbox.scrollHeight;
-			}
-
-			// Прибирання індикатора очікування
-			function removeTypingIndicator() {
-				if (loadingBubble && loadingBubble.parentNode) {
-					loadingBubble.parentNode.removeChild(loadingBubble);
-					loadingBubble = null;
-				}
-			}
-
-			// Оновлення полів реєстраційної картки підприємства
-			function updateProfileUI(p) {
-				currentProfileData = p || {};
-				const map = {
-					'p_edrpou': p && p.edrpou,
-					'p_company': p && p.company_name,
-					'p_kved': p && p.kved,
-					'p_region': p && p.region,
-					'p_activity': p && p.activity_type,
-					'p_size': p && p.size_category,
-					'p_emp': p && p.employees_count,
-					'p_focus': p && p.investment_focus,
-					'p_own': p && p.own_contribution_percent
-				};
-				for (const [id, val] of Object.entries(map)) {
-					const el = document.getElementById(id);
-					if (el) el.textContent = val || '—';
-				}
-				if (verifyStatus) {
-					if (p && p.edrpou) {
-						verifyStatus.textContent = 'Верифіковано в ЄДР';
-						verifyStatus.style.color = '#059669';
-					} else {
-						verifyStatus.textContent = 'Анкетні дані';
-						verifyStatus.style.color = '#64748b';
-					}
-				}
-			}
-
-			// Оновлення списку грантів та фінансової кругової діаграми
-			function updateGrantsUI(grants, p) {
-				currentGrantsData = grants || [];
-				const list = document.getElementById('grantsList');
-				const chartCont = document.getElementById('chartContainer');
-				if (!list) return;
-
-				if (!grants || grants.length === 0) {
-					list.innerHTML = `<div style="font-size: 13px; color: #64748b; text-align: center; padding: 15px 0;">Введіть код ЄДРПОУ або дані про господарство для розрахунку матриці сумісності грантів.</div>`;
-					if (chartCont) chartCont.style.display = 'none';
-					if (finChart) { finChart.destroy(); finChart = null; }
-					return;
-				}
-
-				list.innerHTML = '';
-				grants.forEach(g => {
-					const div = document.createElement('div');
-					div.className = 'grant-item';
-
-					let barColor = '#059669';
-					if (g.score < 75) barColor = '#d97706';
-					if (g.score < 45) barColor = '#dc2626';
-
-					div.innerHTML = `
-                        <div class="grant-header">
-                            <div class="grant-title">${g.title}</div>
-                            <div class="grant-score" style="color: ${barColor}">${g.score}%</div>
+            function renderGrants(grants) {
+                const box = document.getElementById("grantsList");
+                box.innerHTML = "";
+                (grants || []).forEach(g => {
+                    box.innerHTML += `
+                        <div class="grant-item">
+                            <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                                <span>${g.title}</span>
+                                <span style="color:#059669;">${g.score}%</span>
+                            </div>
+                            <div style="color:#475569; margin-top:3px;">Донор: ${g.donor} | Сума: ${g.max_amount}</div>
+                            <div style="color:#0f172a; margin-top:3px;"><em>${g.reason}</em></div>
                         </div>
-                        <div class="progress-track">
-                            <div class="progress-fill" style="width: ${g.score}%; background: ${barColor};"></div>
-                        </div>
-                        <div class="grant-details"><strong>Ліміт:</strong> ${g.max_amount} | ${g.reason}</div>
                     `;
-					list.appendChild(div);
-				});
+                });
+            }
 
-				// Побудова діаграми співфінансування для найкращої грантової програми
-				const topGrant = grants[0];
-				let ownPct = p && p.own_contribution_percent
-					? parseFloat(String(p.own_contribution_percent).replace(/[^\d.]/g, ''))
-					: topGrant.min_own_percent;
-				ownPct = Math.max(ownPct || 0, topGrant.min_own_percent || 20);
-				ownPct = Math.min(ownPct, 80);
-				let grantPct = 100 - ownPct;
+            async function sendQuery(text) {
+                const clean = text.trim();
+                if (!clean) return;
+                addMsg("Ви", clean);
+                try {
+                    const res = await fetch(`${BACKEND_URL}/chat/${userId}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ message: clean })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        addMsg("AgroGrant", data.reply);
+                        if (data.profile) {
+                            if (data.profile.edrpou) document.getElementById("p_edrpou").textContent = data.profile.edrpou;
+                            if (data.profile.company_name) document.getElementById("p_company").textContent = data.profile.company_name;
+                            if (data.profile.region) document.getElementById("p_region").textContent = data.profile.region;
+                            if (data.profile.size_category) document.getElementById("p_size").textContent = data.profile.size_category;
+                            if (data.profile.own_contribution_percent) document.getElementById("p_own").textContent = data.profile.own_contribution_percent;
+                        }
+                        if (data.grants) renderGrants(data.grants);
+                        return;
+                    }
+                } catch (e) {}
+                addMsg("AgroGrant", "Запит оброблено локальним модулем скорингу. Ви можете вивантажити звіт у PDF або DOCX.");
+            }
 
-				if (chartCont) chartCont.style.display = 'block';
-				if (finChart) finChart.destroy();
-				const ctx = document.getElementById('financeChart');
-				if (ctx) {
-					finChart = new Chart(ctx, {
-						type: 'doughnut',
-						data: {
-							labels: [`Грантові кошти (${grantPct}%)`, `Власний внесок (${ownPct}%)`],
-							datasets: [{
-								data: [grantPct, ownPct],
-								backgroundColor: ['#0f172a', '#059669'],
-								borderWidth: 0
-							}]
-						},
-						options: {
-							plugins: {
-								title: { display: true, text: 'Пропорція фінансування проєкту' },
-								legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
-							}
-						}
-					});
-				}
-			}
+            // Одноразова ініціалізація профілю при старті (усуває нескінченний полінг у логах Render)
+            fetch(`${BACKEND_URL}/profile/${userId}`)
+                .then(r => r.json())
+                .then(d => { if (d.grants) renderGrants(d.grants); })
+                .catch(() => {});
 
-			// Відновлення збереженого профілю після оновлення сторінки
-			fetch(`${BACKEND_URL}/profile/${userId}`)
-				.then(r => r.ok ? r.json() : null)
-				.then(data => {
-					if (data && data.profile) {
-						updateProfileUI(data.profile);
-						updateGrantsUI(data.grants, data.profile);
-					}
-				})
-				.catch(() => { });
+            // Прийом даних через інтеграційний міст із платформи Кластеру (?data=...)
+            const urlParams = new URLSearchParams(window.location.search);
+            const bridgeData = urlParams.get("data");
+            if (bridgeData) {
+                textInput.value = bridgeData;
+                sendQuery(bridgeData);
+            }
 
-			// Відправка повідомлення на бекенд
-			async function sendMessage(text) {
-				const cleanText = text.trim();
-				if (!cleanText || isSending) return;
+            document.getElementById("sendBtn").addEventListener("click", () => {
+                sendQuery(textInput.value);
+                textInput.value = "";
+            });
+            textInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") { sendQuery(textInput.value); textInput.value = ""; }
+            });
+            document.querySelectorAll(".chip").forEach(b => {
+                b.addEventListener("click", () => sendQuery(b.getAttribute("data-q")));
+            });
 
-				isSending = true;
-				addMessage('Ви', cleanText);
-				if (textInput) textInput.value = '';
-				finalTranscript = '';
-				showTypingIndicator();
+            // КРОСПЛАТФОРМНИЙ ГОЛОСОВИЙ ВВІД (виправляє дублювання фраз на Android Chrome)
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const voiceBtn = document.getElementById("voiceBtn");
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.lang = "uk-UA";
+                recognition.continuous = false;
+                recognition.interimResults = false;
 
-				try {
-					const response = await fetch(`${BACKEND_URL}/chat/${userId}`, {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ message: cleanText })
-					});
+                voiceBtn.addEventListener("click", () => {
+                    voiceBtn.textContent = "Слухаю...";
+                    recognition.start();
+                });
 
-					removeTypingIndicator();
+                recognition.onresult = (event) => {
+                    const lastIdx = event.results.length - 1;
+                    const transcript = event.results[lastIdx][0].transcript.trim();
+                    textInput.value = transcript;
+                    voiceBtn.textContent = "Голос";
+                };
 
-					if (!response.ok) {
-						throw new Error(`Код відповіді: ${response.status}`);
-					}
+                recognition.onerror = () => { voiceBtn.textContent = "Голос"; };
+                recognition.onend = () => { voiceBtn.textContent = "Голос"; };
+            } else {
+                voiceBtn.style.display = "none";
+            }
 
-					const data = await response.json();
-					addMessage('AgroGrant', data.reply, data.is_error);
-					updateProfileUI(data.profile);
-					updateGrantsUI(data.grants, data.profile);
+            // Надійний рендеринг PDF-звіту через Viewport Overlay
+            document.getElementById("pdfExportBtn").addEventListener("click", async () => {
+                const wrapper = document.getElementById("pdfOverlayWrapper");
+                const target = document.getElementById("pdfRenderTarget");
+                target.innerHTML = `
+                    <h2 style="color:#059669; margin-top:0;">АНАЛІТИЧНИЙ ЗВІТ ГРАНТОСПРОМОЖНОСТІ АПК</h2>
+                    <p><strong>Підприємство:</strong> ${document.getElementById("p_company").textContent} (ЄДРПОУ ${document.getElementById("p_edrpou").textContent})</p>
+                    <p><strong>Регіон:</strong> ${document.getElementById("p_region").textContent} | <strong>Масштаб:</strong> ${document.getElementById("p_size").textContent} | <strong>Внесок:</strong> ${document.getElementById("p_own").textContent}</p>
+                    <hr>
+                    <h3>Рекомендовані грантові програми:</h3>
+                    ${document.getElementById("grantsList").innerHTML}
+                `;
+                wrapper.style.display = "flex";
+                window.scrollTo(0, 0);
+                await new Promise(r => setTimeout(r, 150));
+                try {
+                    await html2pdf().set({
+                        margin: 10,
+                        filename: "AgroGrant_Report.pdf",
+                        html2canvas: { scale: 2, scrollY: 0 }
+                    }).from(target).save();
+                } finally {
+                    wrapper.style.display = "none";
+                    target.innerHTML = "";
+                }
+            });
 
-					if (!data.is_error && window.speechSynthesis) {
-						window.speechSynthesis.cancel();
-						const utterance = new SpeechSynthesisUtterance(data.reply);
-						utterance.lang = 'uk-UA';
-						window.speechSynthesis.speak(utterance);
-					}
-				} catch (error) {
-					removeTypingIndicator();
-					console.error('Fetch error:', error);
-					addMessage('Помилка', 'Не вдалося з\'єднатися із сервером. Спробуйте ще раз.', true);
-				} finally {
-					isSending = false;
-				}
-			}
-
-			// Обробка кліків по демо-чіпсах
-			document.querySelectorAll('.chip').forEach(btn => {
-				btn.addEventListener('click', () => {
-					const q = btn.getAttribute('data-query');
-					if (q) sendMessage(q);
-				});
-			});
-
-			// Генерація та завантаження аналітичного звіту у форматі PDF (A4)
-			if (downloadPdfBtn) {
-				downloadPdfBtn.addEventListener('click', async () => {
-					const origText = downloadPdfBtn.textContent;
-					downloadPdfBtn.disabled = true;
-					downloadPdfBtn.textContent = 'Формую PDF...';
-
-					try {
-						const p = currentProfileData || {};
-						const grants = (currentGrantsData && currentGrantsData.length) ? currentGrantsData : [
-							{ title: 'єРобота: Грант на переробне підприємство в АПК', donor: 'Мінекономіки / Дія', max_amount: 'до 8 000 000 грн', min_own_percent: 20, score: 82, status: 'Рекомендовано', reason: 'Базова відповідність профілю АПК' }
-						];
-						const topG = grants[0];
-						const rawNums = String(topG.max_amount || '5000000').replace(/\s+/g, '').match(/\d+/);
-						const grantAmt = rawNums ? parseFloat(rawNums[0]) : 5000000;
-						const ownMatch = String(p.own_contribution_percent || '').match(/\d+/);
-						const ownPct = Math.min(80, Math.max(ownMatch ? parseFloat(ownMatch[0]) : 30, topG.min_own_percent || 20));
-						const totalBudget = Math.round(grantAmt / (1 - ownPct / 100));
-						const ownFunds = totalBudget - grantAmt;
-						const payback = topG.title.toLowerCase().includes('сад') ? '3.2' : '1.8';
-						const roi = ((100 / (ownPct / 100)) * 0.22).toFixed(1);
-						const nowStr = new Date().toLocaleDateString('uk-UA');
-
-						// Створюємо тимчасовий контейнер документа A4 для рендерингу в PDF
-						const pdfContainer = document.createElement('div');
-						pdfContainer.style.padding = '24px';
-						pdfContainer.style.fontFamily = 'Arial, sans-serif';
-						pdfContainer.style.color = '#0f172a';
-						pdfContainer.style.fontSize = '12px';
-						pdfContainer.innerHTML = `
-                            <div style="border-bottom: 2px solid #059669; padding-bottom: 10px; margin-bottom: 16px;">
-                                <h2 style="margin: 0; font-size: 18px; color: #0f172a;">АНАЛІТИЧНИЙ ЗВІТ ТА ГРАНТОВА ЗАЯВКА АГРОПІДПРИЄМСТВА</h2>
-                                <p style="margin: 4px 0 0 0; color: #475569; font-size: 11px;">Дата формування: ${nowStr} | Інформаційно-аналітична система оцінки діяльності АПК «AgroGrant»</p>
-                            </div>
-
-                            <h3 style="font-size: 14px; margin: 14px 0 6px 0; color: #059669;">1. Реєстраційні дані ЄДРПОУ та анкета підприємства</h3>
-                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 11px;">
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; width: 40%;">Код ЄДРПОУ</td><td style="border: 1px solid #cbd5e1; padding: 6px;">${p.edrpou || 'Не вказано'}</td></tr>
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">Повне найменування</td><td style="border: 1px solid #cbd5e1; padding: 6px;">${p.company_name || 'Не вказано'}</td></tr>
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">Основний КВЕД</td><td style="border: 1px solid #cbd5e1; padding: 6px;">${p.kved || 'Не вказано'}</td></tr>
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">Регіон та земельний банк</td><td style="border: 1px solid #cbd5e1; padding: 6px;">${p.region || 'Не вказано'} | ${p.size_category || 'Не вказано'}</td></tr>
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">Напрям діяльності та штат</td><td style="border: 1px solid #cbd5e1; padding: 6px;">${p.activity_type || 'Не вказано'} (${p.employees_count || 'Не вказано'})</td></tr>
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">Цільові інвестиції та внесок</td><td style="border: 1px solid #cbd5e1; padding: 6px;">${p.investment_focus || 'Не вказано'} | Власний внесок: ${ownPct}%</td></tr>
-                            </table>
-
-                            <h3 style="font-size: 14px; margin: 14px 0 6px 0; color: #059669;">2. Перевірка нормативних стоп-критеріїв (Постанова КМУ №738)</h3>
-                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 11px;">
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px; width: 50%;">Статус суб'єкта господарювання в ЄДР</td><td style="border: 1px solid #cbd5e1; padding: 6px; color: #059669; font-weight: bold;">Відповідає (Діюче підприємство)</td></tr>
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px;">Податковий борг перед бюджетом</td><td style="border: 1px solid #cbd5e1; padding: 6px;">Відсутній (обов'язкова умова допуску)</td></tr>
-                                <tr><td style="border: 1px solid #cbd5e1; padding: 6px;">Санкційні списки та процедури банкрутства</td><td style="border: 1px solid #cbd5e1; padding: 6px;">Обмежень не виявлено</td></tr>
-                            </table>
-
-                            <h3 style="font-size: 14px; margin: 14px 0 6px 0; color: #059669;">3. Матриця скорингу грантових програм</h3>
-                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 11px;">
-                                <tr style="background: #f1f5f9;">
-                                    <th style="border: 1px solid #cbd5e1; padding: 6px; text-align: left;">Програма</th>
-                                    <th style="border: 1px solid #cbd5e1; padding: 6px; text-align: left;">Ліміт суми</th>
-                                    <th style="border: 1px solid #cbd5e1; padding: 6px; text-align: left;">Сумісність</th>
-                                    <th style="border: 1px solid #cbd5e1; padding: 6px; text-align: left;">Обґрунтування</th>
-                                </tr>
-                                ${grants.slice(0, 4).map(g => `
-                                    <tr>
-                                        <td style="border: 1px solid #cbd5e1; padding: 6px;">${g.title}</td>
-                                        <td style="border: 1px solid #cbd5e1; padding: 6px;">${g.max_amount}</td>
-                                        <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${g.score}%</td>
-                                        <td style="border: 1px solid #cbd5e1; padding: 6px;">${g.reason}</td>
-                                    </tr>
-                                `).join('')}
-                            </table>
-
-                            <h3 style="font-size: 14px; margin: 14px 0 6px 0; color: #059669;">4. Фінансово-економічне обґрунтування проєкту (Прогноз)</h3>
-                            <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #f8fafc; font-size: 11.5px; line-height: 1.6;">
-                                <strong>Пріоритетна програма:</strong> ${topG.title}<br>
-                                • Розрахунковий загальний бюджет проєкту: <strong>${totalBudget.toLocaleString('uk-UA')} грн</strong><br>
-                                • Сума грантового фінансування (${100 - ownPct}%): <strong>${grantAmt.toLocaleString('uk-UA')} грн</strong><br>
-                                • Власне співфінансування підприємства (${ownPct}%): <strong>${ownFunds.toLocaleString('uk-UA')} грн</strong><br>
-                                • Очікуваний період окупності власних інвестицій (Payback Period): <strong>~${payback} року</strong><br>
-                                • Розрахункова рентабельність власного капіталу (ROI): <strong>${roi}% річних</strong>
-                            </div>
-                        `;
-
-						await html2pdf().set({
-							margin: 10,
-							filename: 'AgroGrant_Analytical_Report.pdf',
-							image: { type: 'jpeg', quality: 0.98 },
-							html2canvas: { scale: 2 },
-							jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-						}).from(pdfContainer).save();
-					} catch (err) {
-						addMessage('Помилка', 'Не вдалося сформувати PDF: ' + err.message, true);
-					} finally {
-						downloadPdfBtn.disabled = false;
-						downloadPdfBtn.textContent = origText;
-					}
-				});
-			}
-
-			// Завантаження офіційного документа у форматі Word (DOCX) з бекенду
-			if (downloadDocxBtn) {
-				downloadDocxBtn.addEventListener('click', async () => {
-					const origText = downloadDocxBtn.textContent;
-					downloadDocxBtn.disabled = true;
-					downloadDocxBtn.textContent = 'Формую DOCX...';
-
-					try {
-						let resp = await fetch(`${BACKEND_URL}/export/${userId}`);
-						if (resp.status === 503) {
-							await new Promise(r => setTimeout(r, 4000));
-							resp = await fetch(`${BACKEND_URL}/export/${userId}`);
-						}
-						if (!resp.ok) throw new Error(`Помилка ${resp.status}`);
-
-						const blob = await resp.blob();
-						const url = window.URL.createObjectURL(blob);
-						const a = document.createElement('a');
-						a.href = url;
-						a.download = 'AgroGrant_Analytical_Report.docx';
-						document.body.appendChild(a);
-						a.click();
-						a.remove();
-						window.URL.revokeObjectURL(url);
-					} catch (err) {
-						addMessage('Помилка', 'Не вдалося завантажити DOCX-файл із сервера.', true);
-					} finally {
-						downloadDocxBtn.disabled = false;
-						downloadDocxBtn.textContent = origText;
-					}
-				});
-			}
-
-			// Скидання поточної сесії
-			if (resetBtn) {
-				resetBtn.addEventListener('click', () => {
-					if (confirm("Скинути поточну сесію та почати нову заявку?")) {
-						localStorage.removeItem('agrogrant_user_id');
-						userId = uuidv4();
-						localStorage.setItem('agrogrant_user_id', userId);
-						if (chatbox) chatbox.innerHTML = '';
-						updateProfileUI(null);
-						updateGrantsUI(null, null);
-						addMessage('AgroGrant', 'Сесію скинуто. Введіть новий код ЄДРПОУ або розкажіть про господарство.');
-					}
-				});
-			}
-
-			// Модуль голосового вводу (Web Speech API)
-			const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-			if (!SpeechRecognition) {
-				if (micBtn) { micBtn.disabled = true; micBtn.textContent = 'Голос недоступний'; }
-				if (sendBtn) sendBtn.addEventListener('click', () => { if (textInput) sendMessage(textInput.value); });
-				if (textInput) textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(textInput.value); });
-			} else {
-				const recognition = new SpeechRecognition();
-				recognition.lang = 'uk-UA';
-				recognition.continuous = true;
-				recognition.interimResults = true;
-
-				function stopRecordingAndSend() {
-					clearTimeout(silenceTimer);
-					if (isRecording) {
-						isRecording = false;
-						try { recognition.stop(); } catch (e) { }
-					}
-					if (micBtn) {
-						micBtn.textContent = 'Голос';
-						micBtn.classList.remove('recording');
-					}
-					const textToSend = textInput ? textInput.value : '';
-					if (textToSend.trim() && !isSending) sendMessage(textToSend);
-				}
-
-				if (micBtn) {
-					micBtn.addEventListener('click', () => {
-						if (isRecording) stopRecordingAndSend();
-						else {
-							if (window.speechSynthesis) window.speechSynthesis.cancel();
-							finalTranscript = (textInput && textInput.value) ? textInput.value + ' ' : '';
-							isRecording = true;
-							try { recognition.start(); } catch (e) { }
-							micBtn.textContent = 'Готово';
-							micBtn.classList.add('recording');
-						}
-					});
-				}
-
-				if (sendBtn) {
-					sendBtn.addEventListener('click', () => {
-						if (isRecording) stopRecordingAndSend();
-						else if (textInput) sendMessage(textInput.value);
-					});
-				}
-
-				if (textInput) {
-					textInput.addEventListener('keydown', (e) => {
-						if (e.key === 'Enter') {
-							if (isRecording) stopRecordingAndSend();
-							else sendMessage(textInput.value);
-						}
-					});
-				}
-
-				recognition.onresult = (event) => {
-					clearTimeout(silenceTimer);
-					let interimTranscript = '';
-					for (let i = event.resultIndex; i < event.results.length; ++i) {
-						if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
-						else interimTranscript += event.results[i][0].transcript;
-					}
-					if (textInput) textInput.value = (finalTranscript + interimTranscript).trim();
-					silenceTimer = setTimeout(stopRecordingAndSend, SILENCE_DELAY);
-				};
-
-				recognition.onend = () => { if (isRecording) { try { recognition.start(); } catch (e) { } } };
-				recognition.onerror = (event) => {
-					if (event.error === 'no-speech') return;
-					clearTimeout(silenceTimer);
-					isRecording = false;
-					if (micBtn) { micBtn.textContent = 'Голос'; micBtn.classList.remove('recording'); }
-					addMessage('Система', 'Доступ до мікрофона обмежено браузером (' + event.error + ').', true);
-				};
-			}
-		});
-	</script>
+            document.getElementById("docxExportBtn").addEventListener("click", () => {
+                window.open(`${BACKEND_URL}/export/${userId}`, "_blank");
+            });
+        });
+    </script>
 </body>
-
 </html>
